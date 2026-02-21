@@ -81,33 +81,86 @@ button:hover {
   transform: translateY(-1px);
 }
 
-/* ================= GRID ================= */
+/* ================= MAIN SPLIT LAYOUT ================= */
 
 .main {
   flex: 1;
-  display: grid;
-  grid-template-columns: 320px 1fr;
-  gap: 20px;
+  display: flex;
   min-height: 0;
+  overflow: hidden;
 }
 
 /* ================= SIDEBAR ================= */
 
 .sidebar {
+  width: 320px;              /* default width */
+  min-width: 220px;
   display: flex;
   flex-direction: column;
   gap: 16px;
-  overflow-y: auto;
   padding-right: 6px;
   min-height: 0;
+  overflow: hidden;
+}
+
+/* Make panels stack vertically */
+.sidebar .panel {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Keyword panel wrapper grows */
+#keywordPanelWrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Keyword editor takes full remaining space */
+#keywordEditor {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+/* Allow keyword content to scroll internally */
+#keywordPanelWrap .panel-content {
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* ================= DIVIDER ================= */
+
+.divider {
+  width: 8px;
+  cursor: col-resize;
+  background: transparent;
+  position: relative;
+  z-index: 10;
+}
+
+.divider::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2px;
+  height: 100%;
+  background: rgba(255,255,255,0.15);
+  transition: background 0.2s ease;
+}
+
+.divider:hover::before {
+  background: var(--primary);
 }
 
 /* ================= CONTENT ================= */
 
 .content {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 0;
+  min-width: 0;
 }
 
 /* ================= PANELS ================= */
@@ -150,7 +203,6 @@ button:hover {
   display: flex;
   align-items: center;
   gap: 6px;
-
   background: rgba(255,255,255,0.05);
   padding: 6px 12px;
   border-radius: 20px;
@@ -164,15 +216,12 @@ button:hover {
 }
 
 .category-grid input[type="checkbox"] {
-  width: auto;
-  height: auto;
   margin: 0;
   accent-color: var(--primary);
 }
 
 /* ================= MODERN INPUT STYLE ================= */
 
-/* Target everything except checkbox/radio */
 input:not([type="checkbox"]):not([type="radio"]) {
   width: 100%;
   background: linear-gradient(180deg, #1a1a2a, #141421);
@@ -199,7 +248,6 @@ input:not([type="checkbox"]):not([type="radio"]):focus {
   transform: translateY(-1px);
 }
 
-/* Special category input */
 .keyword-add-category {
   margin-top: 16px;
   font-weight: 500;
@@ -276,11 +324,16 @@ input:not([type="checkbox"]):not([type="radio"]):focus {
 
 @media (max-width: 900px) {
   .main {
-    grid-template-columns: 1fr;
+    flex-direction: column;
+  }
+
+  .divider {
+    display: none;
   }
 
   .sidebar {
-    overflow-y: auto;
+    width: 100% !important;
+    min-width: unset;
   }
 }
 </style>
@@ -301,7 +354,7 @@ input:not([type="checkbox"]):not([type="radio"]):focus {
 
   <div class="main">
 
-    <div class="sidebar">
+    <div class="sidebar" id="sidebar">
 
       <div class="panel active" id="categoriesPanel">
         <div class="panel-header" onclick="togglePanel('categoriesPanel')">
@@ -332,6 +385,8 @@ input:not([type="checkbox"]):not([type="radio"]):focus {
       </div>
 
     </div>
+
+     <div class="divider" id="divider"></div>
 
     <div class="content">
 

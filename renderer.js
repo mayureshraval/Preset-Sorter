@@ -22,7 +22,61 @@ async function initUI() {
   renderCategoryToggles(keywords);
   renderKeywordEditor(keywords);
 }
+// ================= RESIZABLE SIDEBAR =================
 
+document.addEventListener("DOMContentLoaded", () => {
+
+  const divider = document.getElementById("divider");
+  const sidebar = document.getElementById("sidebar");
+  const main = document.querySelector(".main");
+
+  if (!divider || !sidebar || !main) {
+    console.error("Resize elements not found");
+    return;
+  }
+
+  const savedWidth = localStorage.getItem("sidebarWidth");
+  if (savedWidth) {
+    sidebar.style.width = savedWidth;
+  }
+
+  let isDragging = false;
+
+  divider.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    isDragging = true;
+
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  });
+
+ document.addEventListener("mousemove", (e) => {
+  if (!isDragging) return;
+
+  const mainRect = main.getBoundingClientRect();
+  const containerWidth = mainRect.width;
+
+  const newWidth = e.clientX - mainRect.left;
+
+  const minWidth = 220;
+  const maxWidth = containerWidth - 220; // leave minimum space for preview
+
+  if (newWidth >= minWidth && newWidth <= maxWidth) {
+    sidebar.style.width = newWidth + "px";
+  }
+});
+
+  document.addEventListener("mouseup", () => {
+    if (!isDragging) return;
+
+    isDragging = false;
+    document.body.style.cursor = "default";
+    document.body.style.userSelect = "auto";
+
+    localStorage.setItem("sidebarWidth", sidebar.style.width);
+  });
+
+});
 // ================= CATEGORY TOGGLES =================
 function renderCategoryToggles(keywords) {
   const panel = document.getElementById("categoryPanel");
@@ -50,7 +104,6 @@ function renderKeywordEditor(keywords) {
 
   const protectedCategories = keywords._meta?.protected || [];
 
-  editor.style.maxHeight = "300px";
   editor.style.overflowY = "auto";
 
   Object.entries(keywords).forEach(([category, words]) => {
