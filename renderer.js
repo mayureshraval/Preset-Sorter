@@ -1,5 +1,6 @@
 let currentFolder = null;
 let previewData = [];
+let duplicateData = [];
 let progressListenerAttached = false;
 
 const statusText = document.getElementById("statusText");
@@ -13,6 +14,16 @@ function setBusy(state) {
   selectBtn.disabled = state;
 }
 
+function getEnabledCategories() {
+  const checkboxes = document.querySelectorAll(".category-toggle:checked");
+
+  if (checkboxes.length === 0) {
+    return null; // means allow all categories
+  }
+
+  return Array.from(checkboxes).map(cb => cb.value);
+}
+
 async function selectFolder() {
   currentFolder = await window.api.chooseFolder();
   if (!currentFolder) return;
@@ -21,7 +32,12 @@ async function selectFolder() {
   statusText.innerText = "Analyzing presets...";
   progressFill.style.width = "0%";
 
-  previewData = await window.api.preview(currentFolder);
+  const enabledCategories = getEnabledCategories();
+
+  const response = await window.api.preview(currentFolder, enabledCategories);
+
+  previewData = response.results;
+  duplicateData = response.duplicates;
 
   setBusy(false);
 
@@ -30,12 +46,17 @@ async function selectFolder() {
     return;
   }
 
-  statusText.innerText = "Preview ready.";
   previewSection.style.display = "block";
   summaryBox.style.display = "block";
 
   renderPreview();
   renderSummary();
+
+  if (duplicateData.length > 0) {
+    statusText.innerText = `Preview ready. ${duplicateData.length} duplicate(s) detected.`;
+  } else {
+    statusText.innerText = "Preview ready. No duplicates detected.";
+  }
 }
 
 function renderPreview() {
@@ -56,6 +77,14 @@ function renderPreview() {
     row.appendChild(tag);
     previewDiv.appendChild(row);
   });
+
+  if (previewData.length > 400) {
+    const more = document.createElement("div");
+    more.style.opacity = "0.6";
+    more.style.padding = "6px 10px";
+    more.textContent = `...and ${previewData.length - 400} more`;
+    previewDiv.appendChild(more);
+  }
 }
 
 function renderSummary() {
@@ -65,11 +94,22 @@ function renderSummary() {
     counts[item.category] = (counts[item.category] || 0) + 1;
   });
 
+  let duplicateSection = "";
+  if (duplicateData.length > 0) {
+    duplicateSection = `
+      <br><br>
+      <strong style="color:#ff5555;">Duplicates Detected:</strong><br>
+      ${duplicateData.slice(0, 10).join("<br>")}
+      ${duplicateData.length > 10 ? `<br>...and ${duplicateData.length - 10} more` : ""}
+    `;
+  }
+
   summaryBox.innerHTML = `
-    Total Presets: ${previewData.length}<br><br>
+    <strong>Total Presets:</strong> ${previewData.length}<br><br>
     ${Object.entries(counts)
       .map(([cat, count]) => `${cat}: ${count}`)
       .join("<br>")}
+    ${duplicateSection}
     <br><br>
     <button onclick="confirmSort()">Confirm Sort</button>
     <button onclick="cancelSort()">Cancel</button>
@@ -100,7 +140,7 @@ async function confirmSort() {
 
   const count = await window.api.execute(currentFolder, previewData);
 
-  statusText.innerText = `Completed. ${count} presets sorted.`;
+  statusText.innerText = `Completed. ${count} presets sorted successfully.`;
   previewSection.style.display = "none";
   summaryBox.style.display = "none";
   setBusy(false);
@@ -108,10 +148,12 @@ async function confirmSort() {
 
 async function undo() {
   const count = await window.api.undo();
+
   if (count === 0) {
     statusText.innerText = "Nothing to undo.";
   } else {
     statusText.innerText = `Undo complete. ${count} presets restored.`;
   }
+
   progressFill.style.width = "0%";
 }

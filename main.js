@@ -29,8 +29,8 @@ ipcMain.handle("choose-folder", async () => {
   return result.filePaths[0];
 });
 
-ipcMain.handle("preview-sort", async (event, folderPath) => {
-  return sorter.previewSort(folderPath);
+ipcMain.handle("preview-sort", async (event, folderPath, enabledCategories) => {
+  return sorter.previewSort(folderPath, enabledCategories);
 });
 
 ipcMain.handle("execute-sort", async (event, folderPath, previewData) => {
