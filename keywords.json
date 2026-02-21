@@ -20,118 +20,173 @@
       "Misc"
     ]
   },
-  "Bass": [
-    "bass",
-    "sub",
-    "808",
-    "low",
-    "reese",
-    "moog",
-    "saw",
-    "bs",
-    "BS"
-  ],
-  "Lead": [
-    "lead",
-    "solo",
-    "main",
-    "topline",
-    "ld",
-    "LD"
-  ],
-  "Pluck": [
-    "pluck",
-    "arppluck",
-    "pl"
-  ],
-  "Pad": [
-    "pad",
-    "atmo",
-    "ambient",
-    "texture",
-    "drone",
-    "pd"
-  ],
-  "Brass": [
-    "brass",
-    "horn",
-    "trumpet",
-    "trombone",
-    "br"
-  ],
-  "Bell": [
-    "bell",
-    "chime",
-    "mallet",
-    "glock"
-  ],
-  "FX": [
-    "fx",
-    "impact",
-    "rise",
-    "down",
-    "sweep",
-    "noise",
-    "whoosh"
-  ],
-  "Synth": [
-    "synth",
-    "analog",
-    "digital",
-    "mono",
-    "poly",
-    "saw",
-    "square",
-    "SY"
-  ],
-"Drums": [
-  "drum", "kick", "snare", "hihat", "hat", "clap", "perc", "percussion",
-  "kd", "sn", "hh", "cp", "pr"
-],
-  "Arp": [
-    "arp",
-    "arpeggio",
-    "arpeggiated",
-    "ar"
-  ],
-  "Seq": [
-    "seq",
-    "sequence",
-    "step",
-    "pattern",
-    "SEQ",
-    "SQ"
-  ],
-  "Chords": [
-    "chord",
-    "stack",
-    "harmony",
-    "CH"
-  ],
-  "Piano": [
-    "piano",
-    "keys",
-    "rhodes",
-    "pn"
-  ],
-  "Strings": [
-    "string",
-    "violin",
-    "cello",
-    "orchestra",
-    "ST"
-  ],
-  "Vocal": [
-    "vocal",
-    "vox",
-    "choir",
-    "chant"
-  ],
-  "Guitar": [
-    "guitar",
-    "strum",
-    "pluckgtr",
-    "GT"
-  ],
-  "Misc": []
+  "Bass": {
+    "default": [
+      "bass",
+      "sub",
+      "808",
+      "low",
+      "reese",
+      "moog",
+      "bs"
+    ],
+    "custom": []
+  },
+  "Lead": {
+    "default": [
+      "lead",
+      "solo",
+      "main",
+      "topline",
+      "ld"
+    ],
+    "custom": []
+  },
+  "Pluck": {
+    "default": [
+      "pluck",
+      "arppluck",
+      "pl"
+    ],
+    "custom": []
+  },
+  "Pad": {
+    "default": [
+      "pad",
+      "atmo",
+      "ambient",
+      "texture",
+      "drone",
+      "pd"
+    ],
+    "custom": []
+  },
+  "Brass": {
+    "default": [
+      "brass",
+      "horn",
+      "trumpet",
+      "trombone",
+      "br"
+    ],
+    "custom": []
+  },
+  "Bell": {
+    "default": [
+      "bell",
+      "chime",
+      "mallet",
+      "glock"
+    ],
+    "custom": []
+  },
+  "FX": {
+    "default": [
+      "fx",
+      "impact",
+      "riser",
+      "sweep",
+      "noise",
+      "whoosh"
+    ],
+    "custom": []
+  },
+  "Synth": {
+    "default": [
+      "synth",
+      "analog",
+      "digital",
+      "mono",
+      "poly",
+      "sy"
+    ],
+    "custom": []
+  },
+  "Drums": {
+    "default": [
+      "drum",
+      "kick",
+      "snare",
+      "hihat",
+      "hat",
+      "clap",
+      "perc",
+      "percussion",
+      "kd",
+      "sn",
+      "hh",
+      "cp",
+      "pr"
+    ],
+    "custom": []
+  },
+  "Arp": {
+    "default": [
+      "arp",
+      "arpeggio",
+      "arpeggiated",
+      "ar"
+    ],
+    "custom": []
+  },
+  "Seq": {
+    "default": [
+      "seq",
+      "sequence",
+      "step",
+      "pattern",
+      "sq"
+    ],
+    "custom": []
+  },
+  "Chords": {
+    "default": [
+      "chord",
+      "stack",
+      "harmony",
+      "ch"
+    ],
+    "custom": []
+  },
+  "Piano": {
+    "default": [
+      "piano",
+      "keys",
+      "rhodes",
+      "pn"
+    ],
+    "custom": []
+  },
+  "Strings": {
+    "default": [
+      "string",
+      "violin",
+      "cello",
+      "orchestra",
+      "st"
+    ],
+    "custom": []
+  },
+  "Vocal": {
+    "default": [
+      "vocal",
+      "vox",
+      "choir",
+      "chant"
+    ],
+    "custom": []
+  },
+  "Guitar": {
+    "default": [
+      "guitar",
+      "strum",
+      "pluckgtr",
+      "gt"
+    ],
+    "custom": []
+  },
+  "Misc": {
+    "default": [],
+    "custom": []
+  }
 }

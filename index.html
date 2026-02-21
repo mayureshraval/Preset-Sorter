@@ -254,21 +254,64 @@ input:not([type="checkbox"]):not([type="radio"]):focus {
 }
 
 /* ================= KEYWORD TAGS ================= */
+/* Container for keyword tags */
+.keyword-tag-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;              /* 🔥 this fixes sticking */
+  margin-bottom: 12px;
+}
 
+/* Add wrapper spacing */
+.keyword-add-wrapper {
+  margin-top: 10px;
+}
 .keyword-tag {
-  background: #222235;
-  padding: 5px 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
   border-radius: 20px;
   font-size: 12px;
   cursor: pointer;
-  transition: 0.2s ease;
+  transition: all 0.2s ease;
+  border: 1px solid var(--border);
 }
 
-.keyword-tag:hover {
-  background: #2f2f50;
-  transform: scale(1.05);
+/* Active = Purple */
+.keyword-tag.active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
 }
 
+/* Inactive = Gray */
+.keyword-tag:not(.active) {
+  background: #2a2a38;
+  color: #aaa;
+}
+
+/* Default keywords */
+.keyword-tag.default {
+  font-weight: 500;
+}
+
+/* Custom keywords */
+.keyword-tag.custom {
+  position: relative;
+}
+
+/* Remove button */
+.remove-btn {
+  font-size: 11px;
+  opacity: 0.7;
+  cursor: pointer;
+}
+
+.remove-btn:hover {
+  opacity: 1;
+  color: #ff5c5c;
+}
 /* ================= PREVIEW ================= */
 
 .preview-wrapper {

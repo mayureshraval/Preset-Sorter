@@ -99,137 +99,92 @@ function renderCategoryToggles(keywords) {
 }
 // ================= KEYWORD EDITOR =================
 function renderKeywordEditor(keywords) {
-  const editor = document.getElementById("keywordEditor");
-  editor.innerHTML = "";
+  const container = document.getElementById("keywordEditor");
+  container.innerHTML = "";
 
-  const protectedCategories = keywords._meta?.protected || [];
-
-  editor.style.overflowY = "auto";
-
-  Object.entries(keywords).forEach(([category, words]) => {
-
+  Object.entries(keywords).forEach(([category, data]) => {
     if (category === "_meta") return;
 
-    const card = document.createElement("div");
-    card.style.background = "rgba(255,255,255,0.04)";
-    card.style.padding = "12px";
-    card.style.borderRadius = "10px";
-    card.style.marginBottom = "12px";
+    const wrapper = document.createElement("div");
+    wrapper.className = "keyword-category";
 
-    const header = document.createElement("div");
-    header.style.display = "flex";
-    header.style.justifyContent = "space-between";
-    header.style.alignItems = "center";
-    header.style.marginBottom = "8px";
-
-    const title = document.createElement("strong");
-    title.textContent = category;
-
-    header.appendChild(title);
-
-    // Only allow delete if NOT protected
-    if (!protectedCategories.includes(category)) {
-      const deleteBtn = document.createElement("button");
-      deleteBtn.textContent = "✕";
-      deleteBtn.style.background = "transparent";
-      deleteBtn.style.border = "none";
-      deleteBtn.style.color = "#ff6b6b";
-      deleteBtn.style.cursor = "pointer";
-
-      deleteBtn.onclick = async () => {
-        delete keywords[category];
-        await window.api.saveKeywords(keywords);
-        renderKeywordEditor(keywords);
-        renderCategoryToggles(keywords);
-      };
-
-      header.appendChild(deleteBtn);
-    }
+    const title = document.createElement("h4");
+    title.innerText = category;
+    wrapper.appendChild(title);
 
     const tagContainer = document.createElement("div");
-    tagContainer.style.display = "flex";
-    tagContainer.style.flexWrap = "wrap";
-    tagContainer.style.gap = "6px";
+    tagContainer.className = "keyword-tag-container";
 
-    words.forEach(word => {
-      const tag = document.createElement("span");
-      tag.textContent = word;
-      tag.className = "keyword-tag";
+    // ===== DEFAULT KEYWORDS =====
+    data.default.forEach(word => {
+      const tag = document.createElement("div");
+      tag.className = "keyword-tag default active";
+      tag.innerText = word;
 
-      tag.onclick = async () => {
-
-        const protectedCategories = keywords._meta?.protected || [];
-        const isProtected = protectedCategories.includes(category);
-
-        // Prevent deleting last keyword in protected category
-        if (isProtected && keywords[category].length <= 1) {
-          alert("Cannot remove all keywords from a protected category.");
-          return;
-        }
-
-        const confirmDelete = confirm(`Remove keyword "${word}"?`);
-        if (!confirmDelete) return;
-
-        keywords[category] = keywords[category].filter(w => w !== word);
-
-        await window.api.saveKeywords(keywords);
-        renderKeywordEditor(keywords);
+      tag.onclick = () => {
+        tag.classList.toggle("active");
       };
 
       tagContainer.appendChild(tag);
     });
 
-    const addInput = document.createElement("input");
-    addInput.placeholder = "Add keyword and press Enter...";
-    addInput.style.marginTop = "10px";
+    // ===== CUSTOM KEYWORDS =====
+    data.custom.forEach(word => {
+      const tag = document.createElement("div");
+      tag.className = "keyword-tag custom active";
 
-    addInput.onkeydown = async (e) => {
-      if (e.key === "Enter" && addInput.value.trim()) {
-        keywords[category].push(addInput.value.trim());
-        await window.api.saveKeywords(keywords);
+      const text = document.createElement("span");
+      text.innerText = word;
+
+      const remove = document.createElement("span");
+      remove.innerText = "✕";
+      remove.className = "remove-btn";
+
+      remove.onclick = (e) => {
+        e.stopPropagation();
+        data.custom = data.custom.filter(w => w !== word);
+        window.api.saveKeywords(keywords);
         renderKeywordEditor(keywords);
+      };
+
+      tag.onclick = () => {
+        tag.classList.toggle("active");
+      };
+
+      tag.appendChild(text);
+      tag.appendChild(remove);
+      tagContainer.appendChild(tag);
+    });
+
+    wrapper.appendChild(tagContainer);
+
+    // ===== ADD CUSTOM KEYWORD INPUT =====
+    const addWrapper = document.createElement("div");
+    addWrapper.className = "keyword-add-wrapper";
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.placeholder = "Add custom keyword...";
+
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && input.value.trim()) {
+        const newWord = input.value.trim().toLowerCase();
+
+        if (!data.custom.includes(newWord)) {
+          data.custom.push(newWord);
+          window.api.saveKeywords(keywords);
+          renderKeywordEditor(keywords);
+        }
+
+        input.value = "";
       }
-    };
+    });
 
-    card.appendChild(header);
-    card.appendChild(tagContainer);
-    card.appendChild(addInput);
+    addWrapper.appendChild(input);
+    wrapper.appendChild(addWrapper);
 
-    editor.appendChild(card);
+    container.appendChild(wrapper);
   });
-
-  // Add new custom category
-  const newInput = document.createElement("input");
-  newInput.placeholder = "Create new category and press Enter...";
-  newInput.className = "keyword-add-category";
-
-  newInput.onkeydown = async (e) => {
-    if (e.key === "Enter" && newInput.value.trim()) {
-      const newCat = newInput.value.trim();
-
-      if (!keywords[newCat]) {
-        keywords[newCat] = [];
-        await window.api.saveKeywords(keywords);
-        renderKeywordEditor(keywords);
-        renderCategoryToggles(keywords);
-      }
-    }
-  };
-  const restoreBtn = document.createElement("button");
-  restoreBtn.textContent = "Restore Default Keywords";
-  restoreBtn.style.marginTop = "16px";
-
-  restoreBtn.onclick = async () => {
-    const confirmRestore = confirm("Restore all default categories and keywords?");
-    if (!confirmRestore) return;
-
-    const response = await window.api.restoreDefaults();
-    renderKeywordEditor(response);
-    renderCategoryToggles(response);
-  };
-
-  editor.appendChild(restoreBtn);
-  editor.appendChild(newInput);
 }
 // ================= SELECT FOLDER =================
 async function selectFolder() {

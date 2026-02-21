@@ -103,23 +103,37 @@ function getBestCategory(filename, keywords) {
   let scoreMax = 0;
 
   for (const [category, words] of Object.entries(keywords)) {
+
     if (category === "_meta") continue;
+
+    // 🔥 Merge default + custom
+    const wordList = [
+      ...(words.default || []),
+      ...(words.custom || [])
+    ];
 
     let score = 0;
 
-    for (const word of words) {
+    for (const word of wordList) {
       const cleanWord = word.toLowerCase().trim();
 
-      // Strong match (whole word)
       const regex = new RegExp(`\\b${cleanWord}\\b`, "i");
+
       if (regex.test(name)) {
         score += 3;
         continue;
       }
 
-      // Weak match (substring)
-      if (name.includes(cleanWord)) {
-        score += 1;
+      // 2-letter protection
+      if (cleanWord.length <= 2) {
+        const shortRegex = new RegExp(`\\b${cleanWord}\\b`, "i");
+        if (shortRegex.test(name)) {
+          score += 2;
+        }
+      } else {
+        if (name.includes(cleanWord)) {
+          score += 1;
+        }
       }
     }
 
@@ -129,7 +143,7 @@ function getBestCategory(filename, keywords) {
     }
   }
 
-  // 🔥 If no strong signal, return Misc
+  // fallback
   if (scoreMax < 2) {
     return "Misc";
   }
