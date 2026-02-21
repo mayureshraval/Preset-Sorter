@@ -103,22 +103,35 @@ function getBestCategory(filename, keywords) {
   let scoreMax = 0;
 
   for (const [category, words] of Object.entries(keywords)) {
-
-    if (category === "_meta") continue; // ignore meta
+    if (category === "_meta") continue;
 
     let score = 0;
 
     for (const word of words) {
-      const regex = new RegExp(`\\b${word}\\b`, "i");
+      const cleanWord = word.toLowerCase().trim();
 
-      if (regex.test(name)) score += 2;
-      else if (name.includes(word)) score += 1;
+      // Strong match (whole word)
+      const regex = new RegExp(`\\b${cleanWord}\\b`, "i");
+      if (regex.test(name)) {
+        score += 3;
+        continue;
+      }
+
+      // Weak match (substring)
+      if (name.includes(cleanWord)) {
+        score += 1;
+      }
     }
 
     if (score > scoreMax) {
       scoreMax = score;
       best = category;
     }
+  }
+
+  // 🔥 If no strong signal, return Misc
+  if (scoreMax < 2) {
+    return "Misc";
   }
 
   return best || "Misc";
@@ -129,20 +142,29 @@ function previewSort(sourceDir, enabledCategories, intelligenceMode) {
   const keywords = getKeywords();
   const results = [];
 
-  const rootFolders = fs.readdirSync(sourceDir)
+  const topLevelFolders = fs.readdirSync(sourceDir)
     .map(name => path.join(sourceDir, name))
     .filter(p => fs.statSync(p).isDirectory());
 
-  rootFolders.forEach(folderPath => {
-    const folderName = path.basename(folderPath);
-    const files = fs.readdirSync(folderPath);
+  function scan(dir, packRoot) {
+    const entries = fs.readdirSync(dir);
 
-    files.forEach(file => {
-      const full = path.join(folderPath, file);
+    entries.forEach(entry => {
+      const fullPath = path.join(dir, entry);
+      const stat = fs.statSync(fullPath);
 
-      if (!file.endsWith(".fxp") && !file.endsWith(".fxb")) return;
+      if (stat.isDirectory()) {
 
-      const category = getBestCategory(file, keywords);
+        // Skip category folders
+        if (keywords[entry]) return;
+
+        scan(fullPath, packRoot);
+        return;
+      }
+
+      if (!entry.endsWith(".fxp") && !entry.endsWith(".fxb")) return;
+
+      const category = getBestCategory(entry, keywords);
 
       if (
         Array.isArray(enabledCategories) &&
@@ -150,21 +172,25 @@ function previewSort(sourceDir, enabledCategories, intelligenceMode) {
         !enabledCategories.includes(category)
       ) return;
 
-      const intelligence = detectPresetMetadata(file);
+      const intelligence = detectPresetMetadata(entry);
 
       results.push({
-        from: full,
-        file,
+        from: fullPath,
+        file: entry,
         category,
-        parentFolder: folderName,
+        packRoot,
         intelligence
       });
     });
+  }
+
+  topLevelFolders.forEach(folderPath => {
+    const folderName = path.basename(folderPath);
+    scan(folderPath, folderName);
   });
 
   return { results, duplicates: [] };
 }
-
 // ================= EXECUTE SORT =================
 async function executeSort(sourceDir, previewData, intelligenceMode, progressCallback) {
   const moved = [];
@@ -174,7 +200,7 @@ async function executeSort(sourceDir, previewData, intelligenceMode, progressCal
     const item = previewData[i];
     const folderPath = path.join(
       sourceDir,
-      item.parentFolder,
+      item.packRoot,
       item.category
     );
 

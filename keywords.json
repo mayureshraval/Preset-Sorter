@@ -56,7 +56,8 @@
     "brass",
     "horn",
     "trumpet",
-    "trombone"
+    "trombone",
+    "br"
   ],
   "Bell": [
     "bell",
@@ -83,34 +84,23 @@
     "square",
     "SY"
   ],
-  "Drums": [
-    "drum",
-    "kick",
-    "snare",
-    "clap",
-    "hat",
-    "hihat",
-    "perc",
-    "percussion",
-    "rim",
-    "tom",
-    "shaker",
-    "crash",
-    "ride",
-    "loop",
-    "DR"
-  ],
+"Drums": [
+  "drum", "kick", "snare", "hihat", "hat", "clap", "perc", "percussion",
+  "kd", "sn", "hh", "cp", "pr"
+],
   "Arp": [
     "arp",
     "arpeggio",
-    "arpeggiated"
+    "arpeggiated",
+    "ar"
   ],
   "Seq": [
     "seq",
     "sequence",
     "step",
     "pattern",
-    "SEQ"
+    "SEQ",
+    "SQ"
   ],
   "Chords": [
     "chord",
@@ -121,13 +111,15 @@
   "Piano": [
     "piano",
     "keys",
-    "rhodes"
+    "rhodes",
+    "pn"
   ],
   "Strings": [
     "string",
     "violin",
     "cello",
-    "orchestra"
+    "orchestra",
+    "ST"
   ],
   "Vocal": [
     "vocal",

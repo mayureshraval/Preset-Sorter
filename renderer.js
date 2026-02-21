@@ -50,21 +50,21 @@ document.addEventListener("DOMContentLoaded", () => {
     document.body.style.userSelect = "none";
   });
 
- document.addEventListener("mousemove", (e) => {
-  if (!isDragging) return;
+  document.addEventListener("mousemove", (e) => {
+    if (!isDragging) return;
 
-  const mainRect = main.getBoundingClientRect();
-  const containerWidth = mainRect.width;
+    const mainRect = main.getBoundingClientRect();
+    const containerWidth = mainRect.width;
 
-  const newWidth = e.clientX - mainRect.left;
+    const newWidth = e.clientX - mainRect.left;
 
-  const minWidth = 220;
-  const maxWidth = containerWidth - 220; // leave minimum space for preview
+    const minWidth = 220;
+    const maxWidth = containerWidth - 220; // leave minimum space for preview
 
-  if (newWidth >= minWidth && newWidth <= maxWidth) {
-    sidebar.style.width = newWidth + "px";
-  }
-});
+    if (newWidth >= minWidth && newWidth <= maxWidth) {
+      sidebar.style.width = newWidth + "px";
+    }
+  });
 
   document.addEventListener("mouseup", () => {
     if (!isDragging) return;
@@ -158,23 +158,23 @@ function renderKeywordEditor(keywords) {
 
       tag.onclick = async () => {
 
-  const protectedCategories = keywords._meta?.protected || [];
-  const isProtected = protectedCategories.includes(category);
+        const protectedCategories = keywords._meta?.protected || [];
+        const isProtected = protectedCategories.includes(category);
 
-  // Prevent deleting last keyword in protected category
-  if (isProtected && keywords[category].length <= 1) {
-    alert("Cannot remove all keywords from a protected category.");
-    return;
-  }
+        // Prevent deleting last keyword in protected category
+        if (isProtected && keywords[category].length <= 1) {
+          alert("Cannot remove all keywords from a protected category.");
+          return;
+        }
 
-  const confirmDelete = confirm(`Remove keyword "${word}"?`);
-  if (!confirmDelete) return;
+        const confirmDelete = confirm(`Remove keyword "${word}"?`);
+        if (!confirmDelete) return;
 
-  keywords[category] = keywords[category].filter(w => w !== word);
+        keywords[category] = keywords[category].filter(w => w !== word);
 
-  await window.api.saveKeywords(keywords);
-  renderKeywordEditor(keywords);
-};
+        await window.api.saveKeywords(keywords);
+        renderKeywordEditor(keywords);
+      };
 
       tagContainer.appendChild(tag);
     });
@@ -215,20 +215,20 @@ function renderKeywordEditor(keywords) {
       }
     }
   };
-const restoreBtn = document.createElement("button");
-restoreBtn.textContent = "Restore Default Keywords";
-restoreBtn.style.marginTop = "16px";
+  const restoreBtn = document.createElement("button");
+  restoreBtn.textContent = "Restore Default Keywords";
+  restoreBtn.style.marginTop = "16px";
 
-restoreBtn.onclick = async () => {
-  const confirmRestore = confirm("Restore all default categories and keywords?");
-  if (!confirmRestore) return;
+  restoreBtn.onclick = async () => {
+    const confirmRestore = confirm("Restore all default categories and keywords?");
+    if (!confirmRestore) return;
 
-  const response = await window.api.restoreDefaults();
-  renderKeywordEditor(response);
-  renderCategoryToggles(response);
-};
+    const response = await window.api.restoreDefaults();
+    renderKeywordEditor(response);
+    renderCategoryToggles(response);
+  };
 
-editor.appendChild(restoreBtn);
+  editor.appendChild(restoreBtn);
   editor.appendChild(newInput);
 }
 // ================= SELECT FOLDER =================
@@ -280,15 +280,15 @@ function renderPreview() {
   const grouped = {};
 
   filteredPreviewData.forEach(item => {
-    if (!grouped[item.parentFolder]) {
-      grouped[item.parentFolder] = {};
+    if (!grouped[item.packRoot]) {
+      grouped[item.packRoot] = {};
     }
 
-    if (!grouped[item.parentFolder][item.category]) {
-      grouped[item.parentFolder][item.category] = [];
+    if (!grouped[item.packRoot][item.category]) {
+      grouped[item.packRoot][item.category] = [];
     }
 
-    grouped[item.parentFolder][item.category].push(item);
+    grouped[item.packRoot][item.category].push(item);
   });
 
   Object.entries(grouped).forEach(([parent, categories]) => {
@@ -346,128 +346,128 @@ function renderPreview() {
     previewDiv.appendChild(parentWrapper);
   });
 }
-  // ================= Controls =================
-  const controls = document.createElement("div");
-  controls.style.marginBottom = "12px";
+// ================= Controls =================
+const controls = document.createElement("div");
+controls.style.marginBottom = "12px";
 
-  const expandBtn = document.createElement("button");
-  expandBtn.textContent = "Expand All";
-  expandBtn.style.marginRight = "8px";
-  expandBtn.onclick = () => {
-    document.querySelectorAll(".folder-content")
-      .forEach(el => el.style.display = "block");
+const expandBtn = document.createElement("button");
+expandBtn.textContent = "Expand All";
+expandBtn.style.marginRight = "8px";
+expandBtn.onclick = () => {
+  document.querySelectorAll(".folder-content")
+    .forEach(el => el.style.display = "block");
 
-    document.querySelectorAll(".folder-header")
-      .forEach(el => {
-        el.dataset.open = "true";
-        el.textContent = el.dataset.labelOpen;
-      });
-  };
+  document.querySelectorAll(".folder-header")
+    .forEach(el => {
+      el.dataset.open = "true";
+      el.textContent = el.dataset.labelOpen;
+    });
+};
 
-  const collapseBtn = document.createElement("button");
-  collapseBtn.textContent = "Collapse All";
-  collapseBtn.onclick = () => {
-    document.querySelectorAll(".folder-content")
-      .forEach(el => el.style.display = "none");
+const collapseBtn = document.createElement("button");
+collapseBtn.textContent = "Collapse All";
+collapseBtn.onclick = () => {
+  document.querySelectorAll(".folder-content")
+    .forEach(el => el.style.display = "none");
 
-    document.querySelectorAll(".folder-header")
-      .forEach(el => {
-        el.dataset.open = "false";
-        el.textContent = el.dataset.labelClosed;
-      });
-  };
+  document.querySelectorAll(".folder-header")
+    .forEach(el => {
+      el.dataset.open = "false";
+      el.textContent = el.dataset.labelClosed;
+    });
+};
 
-  controls.appendChild(expandBtn);
-  controls.appendChild(collapseBtn);
-  previewDiv.appendChild(controls);
+controls.appendChild(expandBtn);
+controls.appendChild(collapseBtn);
+previewDiv.appendChild(controls);
 
-  // ================= Group by Category =================
-  const grouped = {};
+// ================= Group by Category =================
+const grouped = {};
 
-  filteredPreviewData.forEach(item => {
-    if (!grouped[item.category]) grouped[item.category] = [];
-    grouped[item.category].push(item);
-  });
+filteredPreviewData.forEach(item => {
+  if (!grouped[item.category]) grouped[item.category] = [];
+  grouped[item.category].push(item);
+});
 
-  Object.entries(grouped).forEach(([category, items]) => {
-    const wrapper = document.createElement("div");
+Object.entries(grouped).forEach(([category, items]) => {
+  const wrapper = document.createElement("div");
 
-    const header = document.createElement("div");
-    header.className = "folder-header";
-    header.style.cursor = "pointer";
-    header.style.fontWeight = "600";
-    header.style.marginTop = "10px";
+  const header = document.createElement("div");
+  header.className = "folder-header";
+  header.style.cursor = "pointer";
+  header.style.fontWeight = "600";
+  header.style.marginTop = "10px";
 
-    header.dataset.open = "true";
-    header.dataset.labelOpen = `📂 ${category} (${items.length})`;
-    header.dataset.labelClosed = `📁 ${category} (${items.length})`;
+  header.dataset.open = "true";
+  header.dataset.labelOpen = `📂 ${category} (${items.length})`;
+  header.dataset.labelClosed = `📁 ${category} (${items.length})`;
 
-    header.textContent = header.dataset.labelOpen;
+  header.textContent = header.dataset.labelOpen;
 
-    const content = document.createElement("div");
-    content.className = "folder-content";
-    content.style.marginLeft = "20px";
+  const content = document.createElement("div");
+  content.className = "folder-content";
+  content.style.marginLeft = "20px";
 
-    items.forEach(preset => {
-      const row = document.createElement("div");
-      row.className = "preview-row";
-      row.style.display = "flex";
-      row.style.justifyContent = "space-between";
-      row.style.alignItems = "center";
+  items.forEach(preset => {
+    const row = document.createElement("div");
+    row.className = "preview-row";
+    row.style.display = "flex";
+    row.style.justifyContent = "space-between";
+    row.style.alignItems = "center";
 
-      const nameDiv = document.createElement("div");
-      nameDiv.textContent = preset.file;
+    const nameDiv = document.createElement("div");
+    nameDiv.textContent = preset.file;
 
-      const badgeContainer = document.createElement("div");
-      badgeContainer.style.display = "flex";
-      badgeContainer.style.gap = "6px";
+    const badgeContainer = document.createElement("div");
+    badgeContainer.style.display = "flex";
+    badgeContainer.style.gap = "6px";
 
-      if (intelligenceMode && preset.intelligence) {
-        const intel = preset.intelligence;
+    if (intelligenceMode && preset.intelligence) {
+      const intel = preset.intelligence;
 
-        if (intel.key) {
-          const keyBadge = document.createElement("span");
-          keyBadge.className = "category-tag";
-          keyBadge.style.background = "#00aaff";
-          keyBadge.textContent = intel.key.toUpperCase();
-          badgeContainer.appendChild(keyBadge);
-        }
-
-        if (intel.bpm) {
-          const bpmBadge = document.createElement("span");
-          bpmBadge.className = "category-tag";
-          bpmBadge.style.background = "#ffaa00";
-          bpmBadge.textContent = `${intel.bpm} BPM`;
-          badgeContainer.appendChild(bpmBadge);
-        }
-
-        if (intel.mood) {
-          const moodBadge = document.createElement("span");
-          moodBadge.className = "category-tag";
-          moodBadge.style.background = "#9b59b6";
-          moodBadge.textContent = intel.mood;
-          badgeContainer.appendChild(moodBadge);
-        }
+      if (intel.key) {
+        const keyBadge = document.createElement("span");
+        keyBadge.className = "category-tag";
+        keyBadge.style.background = "#00aaff";
+        keyBadge.textContent = intel.key.toUpperCase();
+        badgeContainer.appendChild(keyBadge);
       }
 
-      row.appendChild(nameDiv);
-      row.appendChild(badgeContainer);
-      content.appendChild(row);
-    });
+      if (intel.bpm) {
+        const bpmBadge = document.createElement("span");
+        bpmBadge.className = "category-tag";
+        bpmBadge.style.background = "#ffaa00";
+        bpmBadge.textContent = `${intel.bpm} BPM`;
+        badgeContainer.appendChild(bpmBadge);
+      }
 
-    header.onclick = () => {
-      const open = header.dataset.open === "true";
-      header.dataset.open = (!open).toString();
-      header.textContent = open
-        ? header.dataset.labelClosed
-        : header.dataset.labelOpen;
-      content.style.display = open ? "none" : "block";
-    };
+      if (intel.mood) {
+        const moodBadge = document.createElement("span");
+        moodBadge.className = "category-tag";
+        moodBadge.style.background = "#9b59b6";
+        moodBadge.textContent = intel.mood;
+        badgeContainer.appendChild(moodBadge);
+      }
+    }
 
-    wrapper.appendChild(header);
-    wrapper.appendChild(content);
-    previewDiv.appendChild(wrapper);
+    row.appendChild(nameDiv);
+    row.appendChild(badgeContainer);
+    content.appendChild(row);
   });
+
+  header.onclick = () => {
+    const open = header.dataset.open === "true";
+    header.dataset.open = (!open).toString();
+    header.textContent = open
+      ? header.dataset.labelClosed
+      : header.dataset.labelOpen;
+    content.style.display = open ? "none" : "block";
+  };
+
+  wrapper.appendChild(header);
+  wrapper.appendChild(content);
+  previewDiv.appendChild(wrapper);
+});
 // ================= START SORT =================
 async function startSort() {
   if (!filteredPreviewData.length || isSorting) return;
