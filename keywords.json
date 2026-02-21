@@ -27,24 +27,30 @@
     "low",
     "reese",
     "moog",
-    "saw"
+    "saw",
+    "bs",
+    "BS"
   ],
   "Lead": [
     "lead",
     "solo",
     "main",
-    "topline"
+    "topline",
+    "ld",
+    "LD"
   ],
   "Pluck": [
     "pluck",
-    "arppluck"
+    "arppluck",
+    "pl"
   ],
   "Pad": [
     "pad",
     "atmo",
     "ambient",
     "texture",
-    "drone"
+    "drone",
+    "pd"
   ],
   "Brass": [
     "brass",
@@ -74,7 +80,8 @@
     "mono",
     "poly",
     "saw",
-    "square"
+    "square",
+    "SY"
   ],
   "Drums": [
     "drum",
@@ -90,7 +97,8 @@
     "shaker",
     "crash",
     "ride",
-    "loop"
+    "loop",
+    "DR"
   ],
   "Arp": [
     "arp",
@@ -101,12 +109,14 @@
     "seq",
     "sequence",
     "step",
-    "pattern"
+    "pattern",
+    "SEQ"
   ],
   "Chords": [
     "chord",
     "stack",
-    "harmony"
+    "harmony",
+    "CH"
   ],
   "Piano": [
     "piano",
@@ -128,7 +138,8 @@
   "Guitar": [
     "guitar",
     "strum",
-    "pluckgtr"
+    "pluckgtr",
+    "GT"
   ],
   "Misc": []
 }

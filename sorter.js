@@ -128,45 +128,41 @@ function getBestCategory(filename, keywords) {
 function previewSort(sourceDir, enabledCategories, intelligenceMode) {
   const keywords = getKeywords();
   const results = [];
-  const duplicates = [];
-  const seen = new Set();
 
-  function scan(dir) {
-    const files = fs.readdirSync(dir);
+  const rootFolders = fs.readdirSync(sourceDir)
+    .map(name => path.join(sourceDir, name))
+    .filter(p => fs.statSync(p).isDirectory());
 
-    for (const file of files) {
-      const full = path.join(dir, file);
-      const stat = fs.statSync(full);
+  rootFolders.forEach(folderPath => {
+    const folderName = path.basename(folderPath);
+    const files = fs.readdirSync(folderPath);
 
-      if (stat.isDirectory()) {
-        scan(full);
-      } else if (file.endsWith(".fxp") || file.endsWith(".fxb")) {
+    files.forEach(file => {
+      const full = path.join(folderPath, file);
 
-        const category = getBestCategory(file, keywords);
+      if (!file.endsWith(".fxp") && !file.endsWith(".fxb")) return;
 
-        if (
-          enabledCategories &&
-          enabledCategories.length > 0 &&
-          !enabledCategories.includes(category)
-        ) continue;
+      const category = getBestCategory(file, keywords);
 
-        if (seen.has(file)) duplicates.push(file);
-        else seen.add(file);
+      if (
+        Array.isArray(enabledCategories) &&
+        enabledCategories.length > 0 &&
+        !enabledCategories.includes(category)
+      ) return;
 
-        const intelligence = detectPresetMetadata(file);
+      const intelligence = detectPresetMetadata(file);
 
-        results.push({
-          from: full,
-          file,
-          category,
-          intelligence
-        });
-      }
-    }
-  }
+      results.push({
+        from: full,
+        file,
+        category,
+        parentFolder: folderName,
+        intelligence
+      });
+    });
+  });
 
-  scan(sourceDir);
-  return { results, duplicates };
+  return { results, duplicates: [] };
 }
 
 // ================= EXECUTE SORT =================
@@ -176,7 +172,11 @@ async function executeSort(sourceDir, previewData, intelligenceMode, progressCal
 
   for (let i = 0; i < previewData.length; i++) {
     const item = previewData[i];
-    const folderPath = path.join(sourceDir, item.category);
+    const folderPath = path.join(
+      sourceDir,
+      item.parentFolder,
+      item.category
+    );
 
     if (!fs.existsSync(folderPath)) {
       fs.mkdirSync(folderPath);

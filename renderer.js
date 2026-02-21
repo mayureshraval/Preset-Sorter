@@ -277,12 +277,75 @@ function applyFilter() {
 function renderPreview() {
   previewDiv.innerHTML = "";
 
-  if (!filteredPreviewData.length) {
-    previewDiv.innerHTML =
-      "<div style='opacity:0.6'>No presets visible.</div>";
-    return;
-  }
+  const grouped = {};
 
+  filteredPreviewData.forEach(item => {
+    if (!grouped[item.parentFolder]) {
+      grouped[item.parentFolder] = {};
+    }
+
+    if (!grouped[item.parentFolder][item.category]) {
+      grouped[item.parentFolder][item.category] = [];
+    }
+
+    grouped[item.parentFolder][item.category].push(item);
+  });
+
+  Object.entries(grouped).forEach(([parent, categories]) => {
+
+    const parentWrapper = document.createElement("div");
+    let parentOpen = true;
+
+    const parentHeader = document.createElement("div");
+    parentHeader.style.cursor = "pointer";
+    parentHeader.style.fontWeight = "600";
+    parentHeader.innerText = `📂 ${parent}`;
+
+    const parentContent = document.createElement("div");
+    parentContent.style.marginLeft = "15px";
+
+    parentHeader.onclick = () => {
+      parentOpen = !parentOpen;
+      parentContent.style.display = parentOpen ? "block" : "none";
+      parentHeader.innerText = `${parentOpen ? "📂" : "📁"} ${parent}`;
+    };
+
+    Object.entries(categories).forEach(([category, items]) => {
+
+      let catOpen = true;
+
+      const catHeader = document.createElement("div");
+      catHeader.style.cursor = "pointer";
+      catHeader.style.fontWeight = "500";
+      catHeader.style.marginTop = "6px";
+      catHeader.innerText = `📂 ${category} (${items.length})`;
+
+      const catContent = document.createElement("div");
+      catContent.style.marginLeft = "15px";
+
+      catHeader.onclick = () => {
+        catOpen = !catOpen;
+        catContent.style.display = catOpen ? "block" : "none";
+        catHeader.innerText =
+          `${catOpen ? "📂" : "📁"} ${category} (${items.length})`;
+      };
+
+      items.forEach(preset => {
+        const row = document.createElement("div");
+        row.className = "preview-row";
+        row.textContent = preset.file;
+        catContent.appendChild(row);
+      });
+
+      parentContent.appendChild(catHeader);
+      parentContent.appendChild(catContent);
+    });
+
+    parentWrapper.appendChild(parentHeader);
+    parentWrapper.appendChild(parentContent);
+    previewDiv.appendChild(parentWrapper);
+  });
+}
   // ================= Controls =================
   const controls = document.createElement("div");
   controls.style.marginBottom = "12px";
@@ -405,7 +468,6 @@ function renderPreview() {
     wrapper.appendChild(content);
     previewDiv.appendChild(wrapper);
   });
-}
 // ================= START SORT =================
 async function startSort() {
   if (!filteredPreviewData.length || isSorting) return;
