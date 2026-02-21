@@ -1,0 +1,16 @@
+{
+  "Arp": ["arp", "arpeggio"],
+  "Bass": ["bass", "sub"],
+  "Bell": ["bell"],
+  "Brass": ["brass", "horn"],
+  "Drums": ["drum", "kick", "snare", "perc", "hihat"],
+  "FX": ["fx", "impact", "rise", "downer"],
+  "Guitar": ["guitar"],
+  "Keys": ["key", "piano", "epiano"],
+  "Lead": ["lead"],
+  "Pad": ["pad", "ambient", "atmo"],
+  "Pluck": ["pluck"],
+  "Synth": ["synth"],
+  "Seq": ["seq", "sequence"],
+  "Chords": ["chord", "stack"]
+}
