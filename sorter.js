@@ -5,26 +5,116 @@ const { detectPresetMetadata } = require("./intelligence");
 const keywordsPath = path.join(__dirname, "keywords.json");
 const logPath = path.join(__dirname, "move-log.json");
 
+// ================= SAFE DEFAULT KEYWORDS =================
+function getDefaultKeywords() {
+  return {
+    _meta: {
+      protected: [
+        "Bass",
+        "Lead",
+        "Pluck",
+        "Pad",
+        "Brass",
+        "Bell",
+        "FX",
+        "Synth",
+        "Drums",
+        "Arp",
+        "Seq",
+        "Chords",
+        "Piano",
+        "Strings",
+        "Vocal",
+        "Guitar",
+        "Misc"
+      ]
+    },
+
+    Bass: ["bass", "sub", "808", "low", "reese", "moog"],
+    Lead: ["lead", "solo", "main", "topline"],
+    Pluck: ["pluck"],
+    Pad: ["pad", "atmo", "ambient", "texture", "drone"],
+    Brass: ["brass", "horn", "trumpet", "trombone"],
+    Bell: ["bell", "chime", "mallet", "glock"],
+    FX: ["fx", "impact", "rise", "down", "sweep", "noise", "whoosh"],
+    Synth: ["synth", "analog", "digital", "mono", "poly", "saw", "square"],
+
+    Drums: [
+      "drum",
+      "kick",
+      "snare",
+      "clap",
+      "hat",
+      "hihat",
+      "perc",
+      "percussion",
+      "rim",
+      "tom",
+      "shaker",
+      "crash",
+      "ride",
+      "loop"
+    ],
+
+    Arp: ["arp", "arpeggio", "arpeggiated"],
+    Seq: ["seq", "sequence", "step", "pattern"],
+    Chords: ["chord", "stack", "harmony"],
+    Piano: ["piano", "keys", "rhodes"],
+    Strings: ["string", "violin", "cello", "orchestra"],
+    Vocal: ["vocal", "vox", "choir", "chant"],
+    Guitar: ["guitar", "strum"],
+    Misc: []
+  };
+}
+
+// ================= LOAD KEYWORDS SAFELY =================
 function getKeywords() {
-  return JSON.parse(fs.readFileSync(keywordsPath));
+  if (!fs.existsSync(keywordsPath)) {
+    const defaults = getDefaultKeywords();
+    fs.writeFileSync(keywordsPath, JSON.stringify(defaults, null, 2));
+    return defaults;
+  }
+
+  try {
+    const data = JSON.parse(fs.readFileSync(keywordsPath));
+
+    // Ensure Misc always exists
+    if (!data["Misc"]) {
+      data["Misc"] = [];
+      fs.writeFileSync(keywordsPath, JSON.stringify(data, null, 2));
+    }
+
+    return data;
+  } catch (err) {
+    const defaults = getDefaultKeywords();
+    fs.writeFileSync(keywordsPath, JSON.stringify(defaults, null, 2));
+    return defaults;
+  }
 }
 
 function saveKeywords(data) {
   fs.writeFileSync(keywordsPath, JSON.stringify(data, null, 2));
 }
 
+// ================= CATEGORY SCORING =================
 function getBestCategory(filename, keywords) {
   const name = filename.toLowerCase();
   let best = null;
   let scoreMax = 0;
 
   for (const [category, words] of Object.entries(keywords)) {
+
+    if (category === "_meta") continue; // ignore meta
+
     let score = 0;
+
     for (const word of words) {
       const regex = new RegExp(`\\b${word}\\b`, "i");
+
       if (regex.test(name)) score += 2;
       else if (name.includes(word)) score += 1;
     }
+
     if (score > scoreMax) {
       scoreMax = score;
       best = category;
@@ -34,11 +124,12 @@ function getBestCategory(filename, keywords) {
   return best || "Misc";
 }
 
-function previewSort(sourceDir, enabledCategories) {
+// ================= PREVIEW =================
+function previewSort(sourceDir, enabledCategories, intelligenceMode) {
   const keywords = getKeywords();
-  const seenNames = new Set();
-  const duplicates = [];
   const results = [];
+  const duplicates = [];
+  const seen = new Set();
 
   function scan(dir) {
     const files = fs.readdirSync(dir);
@@ -50,17 +141,17 @@ function previewSort(sourceDir, enabledCategories) {
       if (stat.isDirectory()) {
         scan(full);
       } else if (file.endsWith(".fxp") || file.endsWith(".fxb")) {
+
         const category = getBestCategory(file, keywords);
 
-        if (enabledCategories && enabledCategories.length > 0 && !enabledCategories.includes(category)) {
-          continue;
-        }
+        if (
+          enabledCategories &&
+          enabledCategories.length > 0 &&
+          !enabledCategories.includes(category)
+        ) continue;
 
-        if (seenNames.has(file)) {
-          duplicates.push(file);
-        } else {
-          seenNames.add(file);
-        }
+        if (seen.has(file)) duplicates.push(file);
+        else seen.add(file);
 
         const intelligence = detectPresetMetadata(file);
 
@@ -75,11 +166,11 @@ function previewSort(sourceDir, enabledCategories) {
   }
 
   scan(sourceDir);
-
   return { results, duplicates };
 }
 
-async function executeSort(sourceDir, previewData, progressCallback) {
+// ================= EXECUTE SORT =================
+async function executeSort(sourceDir, previewData, intelligenceMode, progressCallback) {
   const moved = [];
   const createdFolders = new Set();
 
@@ -92,21 +183,47 @@ async function executeSort(sourceDir, previewData, progressCallback) {
       createdFolders.add(folderPath);
     }
 
-    const dest = path.join(folderPath, item.file);
+    let newFileName = item.file;
 
+    if (intelligenceMode && item.intelligence) {
+      const meta = item.intelligence;
+      const base = path.parse(item.file).name;
+      const ext = path.parse(item.file).ext;
+
+      const parts = [base];
+
+      if (meta.key) parts.push(meta.key.toUpperCase());
+      if (meta.bpm) parts.push(meta.bpm + "BPM");
+      if (meta.mood) parts.push(meta.mood);
+
+      newFileName = parts.join("_") + ext;
+    }
+
+    const dest = path.join(folderPath, newFileName);
     fs.renameSync(item.from, dest);
+
     moved.push({ from: item.from, to: dest });
 
     if (progressCallback) {
-      progressCallback(Math.floor(((i + 1) / previewData.length) * 100));
+      progressCallback(
+        Math.floor(((i + 1) / previewData.length) * 100)
+      );
     }
   }
 
-  fs.writeFileSync(logPath, JSON.stringify({ moved, createdFolders: [...createdFolders] }, null, 2));
+  fs.writeFileSync(
+    logPath,
+    JSON.stringify(
+      { moved, createdFolders: [...createdFolders] },
+      null,
+      2
+    )
+  );
 
   return moved.length;
 }
 
+// ================= UNDO =================
 function undoLastMove() {
   if (!fs.existsSync(logPath)) return 0;
 

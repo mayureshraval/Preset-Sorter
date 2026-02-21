@@ -1,159 +1,385 @@
 let currentFolder = null;
-let previewData = [];
-let duplicateData = [];
-let progressListenerAttached = false;
+let fullPreviewData = [];
+let filteredPreviewData = [];
+let intelligenceMode = false;
+let isSorting = false;
 
 const statusText = document.getElementById("statusText");
 const previewDiv = document.getElementById("preview");
-const summaryBox = document.getElementById("summaryBox");
-const previewSection = document.getElementById("previewSection");
 const progressFill = document.getElementById("progressFill");
-const selectBtn = document.getElementById("selectBtn");
 
-function setBusy(state) {
-  selectBtn.disabled = state;
+// ================= INTELLIGENCE TOGGLE =================
+document.getElementById("intelligenceToggle")
+  .addEventListener("change", e => {
+    intelligenceMode = e.target.checked;
+  });
+
+// ================= INIT =================
+initUI();
+
+async function initUI() {
+  const keywords = await window.api.getKeywords();
+  renderCategoryToggles(keywords);
+  renderKeywordEditor(keywords);
 }
 
-function getEnabledCategories() {
-  const checkboxes = document.querySelectorAll(".category-toggle:checked");
+// ================= CATEGORY TOGGLES =================
+function renderCategoryToggles(keywords) {
+  const panel = document.getElementById("categoryPanel");
+  panel.innerHTML = "";
 
-  if (checkboxes.length === 0) {
-    return null; // means allow all categories
+  Object.entries(keywords).forEach(([cat]) => {
+
+    if (cat === "_meta") return; // 🔥 ignore meta
+
+    const label = document.createElement("label");
+    label.innerHTML = `
+      <input type="checkbox" class="category-toggle" value="${cat}" checked>
+      ${cat}
+    `;
+    panel.appendChild(label);
+  });
+
+  document.querySelectorAll(".category-toggle")
+    .forEach(cb => cb.addEventListener("change", applyFilter));
+}
+// ================= KEYWORD EDITOR =================
+function renderKeywordEditor(keywords) {
+  const editor = document.getElementById("keywordEditor");
+  editor.innerHTML = "";
+
+  const protectedCategories = keywords._meta?.protected || [];
+
+  editor.style.maxHeight = "300px";
+  editor.style.overflowY = "auto";
+
+  Object.entries(keywords).forEach(([category, words]) => {
+
+    if (category === "_meta") return;
+
+    const card = document.createElement("div");
+    card.style.background = "rgba(255,255,255,0.04)";
+    card.style.padding = "12px";
+    card.style.borderRadius = "10px";
+    card.style.marginBottom = "12px";
+
+    const header = document.createElement("div");
+    header.style.display = "flex";
+    header.style.justifyContent = "space-between";
+    header.style.alignItems = "center";
+    header.style.marginBottom = "8px";
+
+    const title = document.createElement("strong");
+    title.textContent = category;
+
+    header.appendChild(title);
+
+    // Only allow delete if NOT protected
+    if (!protectedCategories.includes(category)) {
+      const deleteBtn = document.createElement("button");
+      deleteBtn.textContent = "✕";
+      deleteBtn.style.background = "transparent";
+      deleteBtn.style.border = "none";
+      deleteBtn.style.color = "#ff6b6b";
+      deleteBtn.style.cursor = "pointer";
+
+      deleteBtn.onclick = async () => {
+        delete keywords[category];
+        await window.api.saveKeywords(keywords);
+        renderKeywordEditor(keywords);
+        renderCategoryToggles(keywords);
+      };
+
+      header.appendChild(deleteBtn);
+    }
+
+    const tagContainer = document.createElement("div");
+    tagContainer.style.display = "flex";
+    tagContainer.style.flexWrap = "wrap";
+    tagContainer.style.gap = "6px";
+
+    words.forEach(word => {
+      const tag = document.createElement("span");
+      tag.textContent = word;
+      tag.className = "keyword-tag";
+
+      tag.onclick = async () => {
+
+  const protectedCategories = keywords._meta?.protected || [];
+  const isProtected = protectedCategories.includes(category);
+
+  // Prevent deleting last keyword in protected category
+  if (isProtected && keywords[category].length <= 1) {
+    alert("Cannot remove all keywords from a protected category.");
+    return;
   }
 
-  return Array.from(checkboxes).map(cb => cb.value);
-}
+  const confirmDelete = confirm(`Remove keyword "${word}"?`);
+  if (!confirmDelete) return;
 
+  keywords[category] = keywords[category].filter(w => w !== word);
+
+  await window.api.saveKeywords(keywords);
+  renderKeywordEditor(keywords);
+};
+
+      tagContainer.appendChild(tag);
+    });
+
+    const addInput = document.createElement("input");
+    addInput.placeholder = "Add keyword and press Enter...";
+    addInput.style.marginTop = "10px";
+
+    addInput.onkeydown = async (e) => {
+      if (e.key === "Enter" && addInput.value.trim()) {
+        keywords[category].push(addInput.value.trim());
+        await window.api.saveKeywords(keywords);
+        renderKeywordEditor(keywords);
+      }
+    };
+
+    card.appendChild(header);
+    card.appendChild(tagContainer);
+    card.appendChild(addInput);
+
+    editor.appendChild(card);
+  });
+
+  // Add new custom category
+  const newInput = document.createElement("input");
+  newInput.placeholder = "Create new category and press Enter...";
+  newInput.className = "keyword-add-category";
+
+  newInput.onkeydown = async (e) => {
+    if (e.key === "Enter" && newInput.value.trim()) {
+      const newCat = newInput.value.trim();
+
+      if (!keywords[newCat]) {
+        keywords[newCat] = [];
+        await window.api.saveKeywords(keywords);
+        renderKeywordEditor(keywords);
+        renderCategoryToggles(keywords);
+      }
+    }
+  };
+const restoreBtn = document.createElement("button");
+restoreBtn.textContent = "Restore Default Keywords";
+restoreBtn.style.marginTop = "16px";
+
+restoreBtn.onclick = async () => {
+  const confirmRestore = confirm("Restore all default categories and keywords?");
+  if (!confirmRestore) return;
+
+  const response = await window.api.restoreDefaults();
+  renderKeywordEditor(response);
+  renderCategoryToggles(response);
+};
+
+editor.appendChild(restoreBtn);
+  editor.appendChild(newInput);
+}
+// ================= SELECT FOLDER =================
 async function selectFolder() {
   currentFolder = await window.api.chooseFolder();
   if (!currentFolder) return;
 
-  setBusy(true);
   statusText.innerText = "Analyzing presets...";
-  progressFill.style.width = "0%";
 
-  const enabledCategories = getEnabledCategories();
+  const response = await window.api.preview(
+    currentFolder,
+    null,
+    intelligenceMode
+  );
 
-  const response = await window.api.preview(currentFolder, enabledCategories);
+  console.log("Preview response:", response);
 
-  previewData = response.results;
-  duplicateData = response.duplicates;
+  fullPreviewData = response.results || [];
+  applyFilter();
 
-  setBusy(false);
-
-  if (!previewData.length) {
-    statusText.innerText = "No presets found.";
-    return;
-  }
-
-  previewSection.style.display = "block";
-  summaryBox.style.display = "block";
-
-  renderPreview();
-  renderSummary();
-
-  if (duplicateData.length > 0) {
-    statusText.innerText = `Preview ready. ${duplicateData.length} duplicate(s) detected.`;
-  } else {
-    statusText.innerText = "Preview ready. No duplicates detected.";
-  }
+  statusText.innerText = `Ready. ${fullPreviewData.length} presets found.`;
 }
 
+function getEnabledCategories() {
+  return Array.from(
+    document.querySelectorAll(".category-toggle:checked")
+  ).map(cb => cb.value);
+}
+
+// ================= FILTER =================
+function applyFilter() {
+  const enabled = getEnabledCategories();
+
+  if (!enabled.length) {
+    filteredPreviewData = [];
+  } else {
+    filteredPreviewData = fullPreviewData.filter(item =>
+      enabled.includes(item.category)
+    );
+  }
+
+  renderPreview();
+}
+
+// ================= PREVIEW =================
 function renderPreview() {
   previewDiv.innerHTML = "";
 
-  previewData.slice(0, 400).forEach(item => {
-    const row = document.createElement("div");
-    row.className = "preview-row";
-
-    const file = document.createElement("div");
-    file.textContent = item.file;
-
-    const tag = document.createElement("div");
-    tag.className = "category-tag";
-    tag.textContent = item.category;
-
-    row.appendChild(file);
-    row.appendChild(tag);
-    previewDiv.appendChild(row);
-  });
-
-  if (previewData.length > 400) {
-    const more = document.createElement("div");
-    more.style.opacity = "0.6";
-    more.style.padding = "6px 10px";
-    more.textContent = `...and ${previewData.length - 400} more`;
-    previewDiv.appendChild(more);
-  }
-}
-
-function renderSummary() {
-  const counts = {};
-
-  previewData.forEach(item => {
-    counts[item.category] = (counts[item.category] || 0) + 1;
-  });
-
-  let duplicateSection = "";
-  if (duplicateData.length > 0) {
-    duplicateSection = `
-      <br><br>
-      <strong style="color:#ff5555;">Duplicates Detected:</strong><br>
-      ${duplicateData.slice(0, 10).join("<br>")}
-      ${duplicateData.length > 10 ? `<br>...and ${duplicateData.length - 10} more` : ""}
-    `;
+  if (!filteredPreviewData.length) {
+    previewDiv.innerHTML =
+      "<div style='opacity:0.6'>No presets visible.</div>";
+    return;
   }
 
-  summaryBox.innerHTML = `
-    <strong>Total Presets:</strong> ${previewData.length}<br><br>
-    ${Object.entries(counts)
-      .map(([cat, count]) => `${cat}: ${count}`)
-      .join("<br>")}
-    ${duplicateSection}
-    <br><br>
-    <button onclick="confirmSort()">Confirm Sort</button>
-    <button onclick="cancelSort()">Cancel</button>
-  `;
+  // ================= Controls =================
+  const controls = document.createElement("div");
+  controls.style.marginBottom = "12px";
+
+  const expandBtn = document.createElement("button");
+  expandBtn.textContent = "Expand All";
+  expandBtn.style.marginRight = "8px";
+  expandBtn.onclick = () => {
+    document.querySelectorAll(".folder-content")
+      .forEach(el => el.style.display = "block");
+
+    document.querySelectorAll(".folder-header")
+      .forEach(el => {
+        el.dataset.open = "true";
+        el.textContent = el.dataset.labelOpen;
+      });
+  };
+
+  const collapseBtn = document.createElement("button");
+  collapseBtn.textContent = "Collapse All";
+  collapseBtn.onclick = () => {
+    document.querySelectorAll(".folder-content")
+      .forEach(el => el.style.display = "none");
+
+    document.querySelectorAll(".folder-header")
+      .forEach(el => {
+        el.dataset.open = "false";
+        el.textContent = el.dataset.labelClosed;
+      });
+  };
+
+  controls.appendChild(expandBtn);
+  controls.appendChild(collapseBtn);
+  previewDiv.appendChild(controls);
+
+  // ================= Group by Category =================
+  const grouped = {};
+
+  filteredPreviewData.forEach(item => {
+    if (!grouped[item.category]) grouped[item.category] = [];
+    grouped[item.category].push(item);
+  });
+
+  Object.entries(grouped).forEach(([category, items]) => {
+    const wrapper = document.createElement("div");
+
+    const header = document.createElement("div");
+    header.className = "folder-header";
+    header.style.cursor = "pointer";
+    header.style.fontWeight = "600";
+    header.style.marginTop = "10px";
+
+    header.dataset.open = "true";
+    header.dataset.labelOpen = `📂 ${category} (${items.length})`;
+    header.dataset.labelClosed = `📁 ${category} (${items.length})`;
+
+    header.textContent = header.dataset.labelOpen;
+
+    const content = document.createElement("div");
+    content.className = "folder-content";
+    content.style.marginLeft = "20px";
+
+    items.forEach(preset => {
+      const row = document.createElement("div");
+      row.className = "preview-row";
+      row.style.display = "flex";
+      row.style.justifyContent = "space-between";
+      row.style.alignItems = "center";
+
+      const nameDiv = document.createElement("div");
+      nameDiv.textContent = preset.file;
+
+      const badgeContainer = document.createElement("div");
+      badgeContainer.style.display = "flex";
+      badgeContainer.style.gap = "6px";
+
+      if (intelligenceMode && preset.intelligence) {
+        const intel = preset.intelligence;
+
+        if (intel.key) {
+          const keyBadge = document.createElement("span");
+          keyBadge.className = "category-tag";
+          keyBadge.style.background = "#00aaff";
+          keyBadge.textContent = intel.key.toUpperCase();
+          badgeContainer.appendChild(keyBadge);
+        }
+
+        if (intel.bpm) {
+          const bpmBadge = document.createElement("span");
+          bpmBadge.className = "category-tag";
+          bpmBadge.style.background = "#ffaa00";
+          bpmBadge.textContent = `${intel.bpm} BPM`;
+          badgeContainer.appendChild(bpmBadge);
+        }
+
+        if (intel.mood) {
+          const moodBadge = document.createElement("span");
+          moodBadge.className = "category-tag";
+          moodBadge.style.background = "#9b59b6";
+          moodBadge.textContent = intel.mood;
+          badgeContainer.appendChild(moodBadge);
+        }
+      }
+
+      row.appendChild(nameDiv);
+      row.appendChild(badgeContainer);
+      content.appendChild(row);
+    });
+
+    header.onclick = () => {
+      const open = header.dataset.open === "true";
+      header.dataset.open = (!open).toString();
+      header.textContent = open
+        ? header.dataset.labelClosed
+        : header.dataset.labelOpen;
+      content.style.display = open ? "none" : "block";
+    };
+
+    wrapper.appendChild(header);
+    wrapper.appendChild(content);
+    previewDiv.appendChild(wrapper);
+  });
 }
+// ================= START SORT =================
+async function startSort() {
+  if (!filteredPreviewData.length || isSorting) return;
 
-function cancelSort() {
-  previewSection.style.display = "none";
-  summaryBox.style.display = "none";
-  previewDiv.innerHTML = "";
-  statusText.innerText = "Sort cancelled.";
-  progressFill.style.width = "0%";
-}
-
-async function confirmSort() {
-  if (!previewData.length) return;
-
-  setBusy(true);
+  isSorting = true;
   statusText.innerText = "Sorting...";
   progressFill.style.width = "0%";
 
-  if (!progressListenerAttached) {
-    window.api.onProgress(value => {
-      progressFill.style.width = value + "%";
-    });
-    progressListenerAttached = true;
-  }
+  window.api.onProgress(val => {
+    progressFill.style.width = val + "%";
+  });
 
-  const count = await window.api.execute(currentFolder, previewData);
+  const count = await window.api.execute(
+    currentFolder,
+    filteredPreviewData,
+    intelligenceMode
+  );
 
-  statusText.innerText = `Completed. ${count} presets sorted successfully.`;
-  previewSection.style.display = "none";
-  summaryBox.style.display = "none";
-  setBusy(false);
+  statusText.innerText = `Sorted ${count} presets.`;
+  isSorting = false;
 }
 
+// ================= UNDO =================
 async function undo() {
+  if (isSorting) return;
+
   const count = await window.api.undo();
-
-  if (count === 0) {
-    statusText.innerText = "Nothing to undo.";
-  } else {
-    statusText.innerText = `Undo complete. ${count} presets restored.`;
-  }
-
+  statusText.innerText = `Undo restored ${count} presets.`;
   progressFill.style.width = "0%";
 }

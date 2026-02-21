@@ -29,16 +29,30 @@ ipcMain.handle("choose-folder", async () => {
   return result.filePaths[0];
 });
 
-ipcMain.handle("preview-sort", async (event, folderPath, enabledCategories) => {
-  return sorter.previewSort(folderPath, enabledCategories);
-});
+ipcMain.handle("get-keywords", () => sorter.getKeywords());
+ipcMain.handle("save-keywords", (event, data) => sorter.saveKeywords(data));
 
-ipcMain.handle("execute-sort", async (event, folderPath, previewData) => {
-  return await sorter.executeSort(folderPath, previewData, (progress) => {
-    mainWindow.webContents.send("sort-progress", progress);
-  });
-});
 
-ipcMain.handle("undo-sort", async () => {
+ipcMain.handle("preview-sort", async (event, folderPath, categories, intelligenceMode) => {
+  console.log("Preview handler triggered");
+  const result = sorter.previewSort(folderPath, categories, intelligenceMode);
+  console.log("Preview finished", result.results.length);
+  return result;
+});
+ipcMain.handle("undo-sort", () => {
   return sorter.undoLastMove();
+});
+
+ipcMain.handle("restore-defaults", () => {
+  const defaults = sorter.getDefaultKeywords();
+  sorter.saveKeywords(defaults);
+  return defaults;
+});
+
+ipcMain.handle("execute-sort", (event, folderPath, previewData, intelligenceMode) => {
+  return sorter.executeSort(folderPath, previewData, intelligenceMode,
+    (progress) => mainWindow.webContents.send("sort-progress", progress)
+  );
+
+  
 });
