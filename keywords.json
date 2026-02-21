@@ -27,28 +27,33 @@
       "808",
       "low",
       "reese",
-      "moog",
-      "bs"
+      "moog"
     ],
-    "custom": []
+    "custom": [
+      "bs",
+      "_bass_"
+    ]
   },
   "Lead": {
     "default": [
       "lead",
       "solo",
       "main",
-      "topline",
-      "ld"
+      "topline"
     ],
-    "custom": []
+    "custom": [
+      "ld",
+      "_lead_"
+    ]
   },
   "Pluck": {
     "default": [
-      "pluck",
-      "arppluck",
-      "pl"
+      "pluck"
     ],
-    "custom": []
+    "custom": [
+      "pl",
+      "_pluck_"
+    ]
   },
   "Pad": {
     "default": [
@@ -56,20 +61,24 @@
       "atmo",
       "ambient",
       "texture",
-      "drone",
-      "pd"
+      "drone"
     ],
-    "custom": []
+    "custom": [
+      "pd",
+      "_pad_"
+    ]
   },
   "Brass": {
     "default": [
       "brass",
       "horn",
       "trumpet",
-      "trombone",
-      "br"
+      "trombone"
     ],
-    "custom": []
+    "custom": [
+      "br",
+      "_brass_"
+    ]
   },
   "Bell": {
     "default": [
@@ -78,18 +87,24 @@
       "mallet",
       "glock"
     ],
-    "custom": []
+    "custom": [
+      "_bell_"
+    ]
   },
   "FX": {
     "default": [
       "fx",
       "impact",
-      "riser",
+      "rise",
+      "down",
       "sweep",
       "noise",
       "whoosh"
     ],
-    "custom": []
+    "custom": [
+      "fx",
+      "_fx_"
+    ]
   },
   "Synth": {
     "default": [
@@ -98,74 +113,97 @@
       "digital",
       "mono",
       "poly",
-      "sy"
+      "saw",
+      "square"
     ],
-    "custom": []
+    "custom": [
+      "sy",
+      "_synth_",
+      "syn"
+    ]
   },
   "Drums": {
     "default": [
       "drum",
       "kick",
       "snare",
-      "hihat",
-      "hat",
       "clap",
+      "hat",
+      "hihat",
       "perc",
       "percussion",
-      "kd",
-      "sn",
-      "hh",
-      "cp",
-      "pr"
+      "rim",
+      "tom",
+      "shaker",
+      "crash",
+      "ride",
+      "loop"
     ],
-    "custom": []
+    "custom": [
+      "dr",
+      "_drum_"
+    ]
   },
   "Arp": {
     "default": [
       "arp",
       "arpeggio",
-      "arpeggiated",
-      "ar"
+      "arpeggiated"
     ],
-    "custom": []
+    "custom": [
+      "ar",
+      "_arp_"
+    ]
   },
   "Seq": {
     "default": [
       "seq",
       "sequence",
       "step",
-      "pattern",
-      "sq"
+      "pattern"
     ],
-    "custom": []
+    "custom": [
+      "sq",
+      "_seq_"
+    ]
   },
   "Chords": {
     "default": [
       "chord",
       "stack",
-      "harmony",
-      "ch"
+      "harmony"
     ],
-    "custom": []
+    "custom": [
+      "ch",
+      "_chord_",
+      "chords"
+    ]
   },
   "Piano": {
     "default": [
       "piano",
       "keys",
-      "rhodes",
-      "pn"
+      "rhodes"
     ],
-    "custom": []
+    "custom": [
+      "pn",
+      "_keys_",
+      "_key_",
+      "ky",
+      "key"
+    ]
   },
   "Strings": {
     "default": [
       "string",
       "violin",
       "cello",
-      "orchestra",
-      "st"
+      "orchestra"
     ],
-    "custom": []
+    "custom": [
+      "str",
+      "st"
+    ]
   },
   "Vocal": {
     "default": [
@@ -174,16 +212,18 @@
       "choir",
       "chant"
     ],
-    "custom": []
+    "custom": [
+      "vo"
+    ]
   },
   "Guitar": {
     "default": [
       "guitar",
-      "strum",
-      "pluckgtr",
-      "gt"
+      "strum"
     ],
-    "custom": []
+    "custom": [
+      "gt"
+    ]
   },
   "Misc": {
     "default": [],
