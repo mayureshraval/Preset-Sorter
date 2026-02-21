@@ -30,40 +30,43 @@ function getDefaultKeywords() {
       ]
     },
 
-    Bass: ["bass", "sub", "808", "low", "reese", "moog"],
-    Lead: ["lead", "solo", "main", "topline"],
-    Pluck: ["pluck"],
-    Pad: ["pad", "atmo", "ambient", "texture", "drone"],
-    Brass: ["brass", "horn", "trumpet", "trombone"],
-    Bell: ["bell", "chime", "mallet", "glock"],
-    FX: ["fx", "impact", "rise", "down", "sweep", "noise", "whoosh"],
-    Synth: ["synth", "analog", "digital", "mono", "poly", "saw", "square"],
+    Bass: { default: ["bass", "sub", "808", "low", "reese", "moog"], custom: [] },
+    Lead: { default: ["lead", "solo", "main", "topline"], custom: [] },
+    Pluck: { default: ["pluck"], custom: [] },
+    Pad: { default: ["pad", "atmo", "ambient", "texture", "drone"], custom: [] },
+    Brass: { default: ["brass", "horn", "trumpet", "trombone"], custom: [] },
+    Bell: { default: ["bell", "chime", "mallet", "glock"], custom: [] },
+    FX: { default: ["fx", "impact", "rise", "down", "sweep", "noise", "whoosh"], custom: [] },
+    Synth: { default: ["synth", "analog", "digital", "mono", "poly", "saw", "square"], custom: [] },
 
-    Drums: [
-      "drum",
-      "kick",
-      "snare",
-      "clap",
-      "hat",
-      "hihat",
-      "perc",
-      "percussion",
-      "rim",
-      "tom",
-      "shaker",
-      "crash",
-      "ride",
-      "loop"
-    ],
+    Drums: {
+      default: [
+        "drum",
+        "kick",
+        "snare",
+        "clap",
+        "hat",
+        "hihat",
+        "perc",
+        "percussion",
+        "rim",
+        "tom",
+        "shaker",
+        "crash",
+        "ride",
+        "loop"
+      ],
+      custom: []
+    },
 
-    Arp: ["arp", "arpeggio", "arpeggiated"],
-    Seq: ["seq", "sequence", "step", "pattern"],
-    Chords: ["chord", "stack", "harmony"],
-    Piano: ["piano", "keys", "rhodes"],
-    Strings: ["string", "violin", "cello", "orchestra"],
-    Vocal: ["vocal", "vox", "choir", "chant"],
-    Guitar: ["guitar", "strum"],
-    Misc: []
+    Arp: { default: ["arp", "arpeggio", "arpeggiated"], custom: [] },
+    Seq: { default: ["seq", "sequence", "step", "pattern"], custom: [] },
+    Chords: { default: ["chord", "stack", "harmony"], custom: [] },
+    Piano: { default: ["piano", "keys", "rhodes"], custom: [] },
+    Strings: { default: ["string", "violin", "cello", "orchestra"], custom: [] },
+    Vocal: { default: ["vocal", "vox", "choir", "chant"], custom: [] },
+    Guitar: { default: ["guitar", "strum"], custom: [] },
+    Misc: { default: [], custom: [] }
   };
 }
 
@@ -80,7 +83,7 @@ function getKeywords() {
 
     // Ensure Misc always exists
     if (!data["Misc"]) {
-      data["Misc"] = [];
+      data["Misc"] = { default: [], custom: [] };
       fs.writeFileSync(keywordsPath, JSON.stringify(data, null, 2));
     }
 
@@ -291,5 +294,6 @@ module.exports = {
   executeSort,
   undoLastMove,
   getKeywords,
-  saveKeywords
+  saveKeywords,
+  getDefaultKeywords
 };

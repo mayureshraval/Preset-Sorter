@@ -102,6 +102,28 @@ function renderKeywordEditor(keywords) {
   const container = document.getElementById("keywordEditor");
   container.innerHTML = "";
 
+  const tools = document.createElement("div");
+  tools.style.display = "flex";
+  tools.style.justifyContent = "flex-end";
+  tools.style.marginBottom = "10px";
+
+  const restoreBtn = document.createElement("button");
+  restoreBtn.textContent = "Restore Defaults";
+  restoreBtn.onclick = async () => {
+    const confirmed = window.confirm(
+      "Restore all categories/keywords to defaults? This will remove custom keyword changes."
+    );
+    if (!confirmed) return;
+
+    const defaults = await window.api.restoreDefaults();
+    renderCategoryToggles(defaults);
+    renderKeywordEditor(defaults);
+    statusText.innerText = "Keyword defaults restored.";
+  };
+
+  tools.appendChild(restoreBtn);
+  container.appendChild(tools);
+
   Object.entries(keywords).forEach(([category, data]) => {
     if (category === "_meta") return;
 
