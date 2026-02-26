@@ -1,463 +1,483 @@
 <!DOCTYPE html>
 <html>
+
 <head>
-<meta charset="UTF-8" />
-<title>Preset Sorter Pro</title>
+  <meta charset="UTF-8" />
+  <title>Preset Sorter Pro</title>
 
-<style>
-:root {
-  --primary: #9400D3;
-  --lavender: #D3D3FF;
-  --neutral: #D8BFD8;
-  --accent: #ED80E9;
-  --bg: #0f0f14;
-  --card: #181824;
-  --border: #2a2a38;
-  --text: #f5f5f5;
-}
+  <style>
+    :root {
+      --primary: #9400D3;
+      --lavender: #D3D3FF;
+      --neutral: #D8BFD8;
+      --accent: #ED80E9;
+      --bg: #0f0f14;
+      --card: #181824;
+      --border: #2a2a38;
+      --text: #f5f5f5;
+    }
 
-/* ================= BASE ================= */
+    /* ================= BASE ================= */
 
-* {
-  box-sizing: border-box;
-}
+    * {
+      box-sizing: border-box;
+    }
 
-html, body {
-  margin: 0;
-  height: 100%;
-  background: var(--bg);
-  font-family: "Segoe UI", sans-serif;
-  color: var(--text);
-  overflow: hidden;
-}
+    html,
+    body {
+      margin: 0;
+      height: 100%;
+      background: var(--bg);
+      font-family: "Segoe UI", sans-serif;
+      color: var(--text);
+      overflow: hidden;
+    }
 
-/* ================= APP LAYOUT ================= */
+    .arrow {
+      transition: transform 0.2s ease;
+    }
 
-.app {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  padding: 24px;
-  gap: 18px;
-}
+    /* ================= APP LAYOUT ================= */
 
-/* ================= HEADER ================= */
+    .app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      padding: 24px;
+      gap: 18px;
+    }
 
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-}
+    /* ================= HEADER ================= */
 
-h1 {
-  margin: 0;
-  font-weight: 600;
-  color: var(--lavender);
-  font-size: clamp(20px, 2vw, 28px);
-}
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+    }
 
-/* ================= BUTTONS ================= */
+    h1 {
+      margin: 0;
+      font-weight: 600;
+      color: var(--lavender);
+      font-size: clamp(20px, 2vw, 28px);
+    }
 
-.toolbar {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
+    /* ================= BUTTONS ================= */
 
-button {
-  background: var(--primary);
-  border: none;
-  padding: 10px 16px;
-  border-radius: 8px;
-  cursor: pointer;
-  color: white;
-  font-weight: 500;
-  transition: all 0.2s ease;
-}
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
 
-button:hover {
-  background: var(--accent);
-  transform: translateY(-1px);
-}
+    button {
+      background: var(--primary);
+      border: none;
+      padding: 10px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      color: white;
+      font-weight: 500;
+      transition: all 0.2s ease;
+    }
 
-/* ================= MAIN SPLIT LAYOUT ================= */
+    button:hover {
+      background: var(--accent);
+      transform: translateY(-1px);
+    }
 
-.main {
-  flex: 1;
-  display: flex;
-  min-height: 0;
-  overflow: hidden;
-}
+    /* ================= MAIN SPLIT LAYOUT ================= */
 
-/* ================= SIDEBAR ================= */
+    .main {
+      flex: 1;
+      display: flex;
+      min-height: 0;
+      overflow: hidden;
+    }
 
-.sidebar {
-  width: 320px;              /* default width */
-  min-width: 220px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding-right: 6px;
-  min-height: 0;
-  overflow: hidden;
-}
+    /* ================= SIDEBAR ================= */
 
-/* Make panels stack vertically */
-.sidebar .panel {
-  display: flex;
-  flex-direction: column;
-}
+    .sidebar {
+      width: 320px;
+      /* default width */
+      min-width: 220px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      padding-right: 6px;
+      min-height: 0;
+      overflow: hidden;
+    }
 
-/* Keyword panel wrapper grows */
-#keywordPanelWrap {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
+    /* Make panels stack vertically */
+    .sidebar .panel {
+      display: flex;
+      flex-direction: column;
+    }
 
-/* Keyword editor takes full remaining space */
-#keywordEditor {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-}
-/* Allow keyword content to scroll internally */
-#keywordPanelWrap .panel-content {
-  flex: 1;
-  overflow-y: auto;
-}
+    /* Keyword panel wrapper grows */
+    #keywordPanelWrap {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
 
-/* ================= DIVIDER ================= */
+    /* Keyword editor takes full remaining space */
+    #keywordEditor {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+    }
 
-.divider {
-  width: 8px;
-  cursor: col-resize;
-  background: transparent;
-  position: relative;
-  z-index: 10;
-}
+    /* Allow keyword content to scroll internally */
+    #keywordPanelWrap .panel-content {
+      flex: 1;
+      overflow-y: auto;
+    }
 
-.divider::before {
-  content: "";
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 2px;
-  height: 100%;
-  background: rgba(255,255,255,0.15);
-  transition: background 0.2s ease;
-}
+    /* ================= DIVIDER ================= */
 
-.divider:hover::before {
-  background: var(--primary);
-}
+    .divider {
+      width: 8px;
+      cursor: col-resize;
+      background: transparent;
+      position: relative;
+      z-index: 10;
+    }
 
-/* ================= CONTENT ================= */
+    .divider::before {
+      content: "";
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 2px;
+      height: 100%;
+      background: rgba(255, 255, 255, 0.15);
+      transition: background 0.2s ease;
+    }
 
-.content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
+    .divider:hover::before {
+      background: var(--primary);
+    }
 
-/* ================= PANELS ================= */
+    /* ================= CONTENT ================= */
 
-.panel {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  overflow: hidden;
-}
+    .content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
 
-.panel-header {
-  padding: 14px 18px;
-  cursor: pointer;
-  font-weight: 600;
-  background: rgba(255,255,255,0.02);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
+    /* ================= PANELS ================= */
 
-.panel-content {
-  padding: 16px;
-  display: none;
-}
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+    }
 
-.panel.active .panel-content {
-  display: block;
-}
+    .panel-header {
+      padding: 14px 18px;
+      cursor: pointer;
+      font-weight: 600;
+      background: rgba(255, 255, 255, 0.02);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
 
-/* ================= CATEGORY PILLS ================= */
+    .panel-content {
+      padding: 16px;
+      display: none;
+    }
 
-.category-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
+    .panel.active .panel-content {
+      display: block;
+    }
 
-.category-grid label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: rgba(255,255,255,0.05);
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 13px;
-  cursor: pointer;
-  transition: 0.2s ease;
-}
+    /* ================= CATEGORY PILLS ================= */
 
-.category-grid label:hover {
-  background: rgba(255,255,255,0.08);
-}
+    .category-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
 
-.category-grid input[type="checkbox"] {
-  margin: 0;
-  accent-color: var(--primary);
-}
+    .category-grid label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.05);
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: 0.2s ease;
+    }
 
-/* ================= MODERN INPUT STYLE ================= */
+    .category-grid label:hover {
+      background: rgba(255, 255, 255, 0.08);
+    }
 
-input:not([type="checkbox"]):not([type="radio"]) {
-  width: 100%;
-  background: linear-gradient(180deg, #1a1a2a, #141421);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 10px 14px;
-  color: var(--text);
-  font-size: 13px;
-  outline: none;
-  transition: all 0.25s ease;
-}
+    .category-grid input[type="checkbox"] {
+      margin: 0;
+      accent-color: var(--primary);
+    }
 
-input:not([type="checkbox"]):not([type="radio"])::placeholder {
-  color: rgba(255,255,255,0.4);
-}
+    /* ================= MODERN INPUT STYLE ================= */
 
-input:not([type="checkbox"]):not([type="radio"]):hover {
-  border-color: #3a3a55;
-}
+    input:not([type="checkbox"]):not([type="radio"]) {
+      width: 100%;
+      background: linear-gradient(180deg, #1a1a2a, #141421);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 14px;
+      color: var(--text);
+      font-size: 13px;
+      outline: none;
+      transition: all 0.25s ease;
+    }
 
-input:not([type="checkbox"]):not([type="radio"]):focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(148, 0, 211, 0.2);
-  transform: translateY(-1px);
-}
+    input:not([type="checkbox"]):not([type="radio"])::placeholder {
+      color: rgba(255, 255, 255, 0.4);
+    }
 
-.keyword-add-category {
-  margin-top: 16px;
-  font-weight: 500;
-}
+    input:not([type="checkbox"]):not([type="radio"]):hover {
+      border-color: #3a3a55;
+    }
 
-/* ================= KEYWORD TAGS ================= */
-/* Container for keyword tags */
-.keyword-tag-container {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;              /* 🔥 this fixes sticking */
-  margin-bottom: 12px;
-}
+    input:not([type="checkbox"]):not([type="radio"]):focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(148, 0, 211, 0.2);
+      transform: translateY(-1px);
+    }
 
-/* Add wrapper spacing */
-.keyword-add-wrapper {
-  margin-top: 10px;
-}
-.keyword-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  border: 1px solid var(--border);
-}
+    .keyword-add-category {
+      margin-top: 16px;
+      font-weight: 500;
+    }
 
-/* Active = Purple */
-.keyword-tag.active {
-  background: var(--primary);
-  color: white;
-  border-color: var(--primary);
-}
+    /* ================= KEYWORD TAGS ================= */
+    /* Container for keyword tags */
+    .keyword-tag-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      /* 🔥 this fixes sticking */
+      margin-bottom: 12px;
+    }
 
-/* Inactive = Gray */
-.keyword-tag:not(.active) {
-  background: #2a2a38;
-  color: #aaa;
-}
+    /* Add wrapper spacing */
+    .keyword-add-wrapper {
+      margin-top: 10px;
+    }
 
-/* Default keywords */
-.keyword-tag.default {
-  font-weight: 500;
-}
+    .keyword-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: 1px solid var(--border);
+    }
 
-/* Custom keywords */
-.keyword-tag.custom {
-  position: relative;
-}
+    /* Active = Purple */
+    .keyword-tag.active {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
 
-/* Remove button */
-.remove-btn {
-  font-size: 11px;
-  opacity: 0.7;
-  cursor: pointer;
-}
+    /* Inactive = Gray */
+    .keyword-tag:not(.active) {
+      background: #2a2a38;
+      color: #aaa;
+    }
 
-.remove-btn:hover {
-  opacity: 1;
-  color: #ff5c5c;
-}
-/* ================= PREVIEW ================= */
+    /* Default keywords */
+    .keyword-tag.default {
+      font-weight: 500;
+    }
 
-.preview-wrapper {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
+    /* Custom keywords */
+    .keyword-tag.custom {
+      position: relative;
+    }
 
-.preview-box {
-  flex: 1;
-  overflow-y: auto;
-  background: #12121a;
-  border-radius: 12px;
-  padding: 12px;
-  border: 1px solid var(--border);
-}
+    /* Remove button */
+    .remove-btn {
+      font-size: 11px;
+      opacity: 0.7;
+      cursor: pointer;
+    }
 
-.preview-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 6px 8px;
-  border-bottom: 1px solid #202030;
-  font-size: 13px;
-}
+    .remove-btn:hover {
+      opacity: 1;
+      color: #ff5c5c;
+    }
 
-/* ================= PROGRESS ================= */
+    /* ================= PREVIEW ================= */
 
-.progress {
-  height: 6px;
-  background: #1a1a25;
-  border-radius: 20px;
-  margin-top: 12px;
-  overflow: hidden;
-}
+    .preview-wrapper {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
 
-.progress-fill {
-  height: 100%;
-  width: 0%;
-  background: linear-gradient(90deg, var(--primary), var(--accent));
-  transition: width 0.2s ease;
-}
+    .preview-box {
+      flex: 1;
+      overflow-y: auto;
+      background: #12121a;
+      border-radius: 12px;
+      padding: 12px;
+      border: 1px solid var(--border);
+    }
 
-/* ================= STATUS ================= */
+    .preview-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 8px;
+      border-bottom: 1px solid #202030;
+      font-size: 13px;
+    }
 
-.status {
-  margin-top: 8px;
-  font-size: 13px;
-  opacity: 0.7;
-}
+    /* ================= PROGRESS ================= */
 
-/* ================= RESPONSIVE ================= */
+    .progress {
+      height: 6px;
+      background: #1a1a25;
+      border-radius: 20px;
+      margin-top: 12px;
+      overflow: hidden;
+    }
 
-@media (max-width: 900px) {
-  .main {
-    flex-direction: column;
-  }
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--primary), var(--accent));
+      transition: width 0.2s ease;
+    }
 
-  .divider {
-    display: none;
-  }
+    /* ================= STATUS ================= */
 
-  .sidebar {
-    width: 100% !important;
-    min-width: unset;
-  }
-}
-</style>
+    .status {
+      margin-top: 8px;
+      font-size: 13px;
+      opacity: 0.7;
+    }
+
+    /* ================= RESPONSIVE ================= */
+
+    @media (max-width: 900px) {
+      .main {
+        flex-direction: column;
+      }
+
+      .divider {
+        display: none;
+      }
+
+      .sidebar {
+        width: 100% !important;
+        min-width: unset;
+      }
+    }
+  </style>
 
 </head>
 
 <body>
-<div class="app">
+  <div class="app">
 
-  <div class="header">
-    <h1>Preset Sorter Pro</h1>
-    <div class="toolbar">
-      <button onclick="selectFolder()">Select Folder</button>
-      <button onclick="startSort()">Start Sort</button>
-      <button onclick="undo()">Undo</button>
-    </div>
-  </div>
-
-  <div class="main">
-
-    <div class="sidebar" id="sidebar">
-
-      <div class="panel active" id="categoriesPanel">
-        <div class="panel-header" onclick="togglePanel('categoriesPanel')">
-          Categories ▼
-        </div>
-        <div class="panel-content">
-          <div id="categoryPanel" class="category-grid"></div>
-        </div>
+    <div class="header">
+      <h1>Preset Sorter Pro</h1>
+      <div class="toolbar">
+        <button onclick="selectFolder()">Select Folder</button>
+        <button onclick="startSort()">Start Sort</button>
+        <button onclick="undo()">Undo</button>
       </div>
-
-      <div class="panel" id="intelligencePanel">
-        <div class="panel-header" onclick="togglePanel('intelligencePanel')">
-          Intelligence ▼
-        </div>
-        <div class="panel-content">
-          <input type="checkbox" id="intelligenceToggle">
-          Enable intelligent rename
-        </div>
-      </div>
-
-      <div class="panel" id="keywordPanelWrap">
-        <div class="panel-header" onclick="togglePanel('keywordPanelWrap')">
-          Keyword Editor ▼
-        </div>
-        <div class="panel-content">
-          <div id="keywordEditor"></div>
-        </div>
-      </div>
-
     </div>
 
-     <div class="divider" id="divider"></div>
+    <div class="main">
 
-    <div class="content">
+      <div class="sidebar" id="sidebar">
 
-      <div class="panel preview-wrapper">
-        <div class="panel-header">Preview</div>
-        <div class="panel-content preview-wrapper">
-          <div id="preview" class="preview-box"></div>
-
-          <div class="progress">
-            <div id="progressFill" class="progress-fill"></div>
+        <div class="panel active" id="categoriesPanel">
+          <div class="panel-header" onclick="togglePanel('categoriesPanel')">
+            <span>Categories</span>
+            <span class="arrow">▼</span>
           </div>
-
-          <div id="statusText" class="status">Ready.</div>
+          <div class="panel-content">
+            <div id="categoryPanel" class="category-grid"></div>
+          </div>
         </div>
+
+        <div class="panel" id="intelligencePanel">
+          <div class="panel-header" onclick="togglePanel('intelligencePanel')">
+            <span>Intelligence</span>
+            <span class="arrow">▼</span>
+          </div>
+          <div class="panel-content">
+            <input type="checkbox" id="intelligenceToggle">
+            Enable intelligent rename
+          </div>
+        </div>
+
+        <div class="panel" id="keywordPanelWrap">
+          <div class="panel-header" onclick="togglePanel('keywordPanelWrap')">
+            <span>keywordEditor</span>
+            <span class="arrow">▼</span>
+          </div>
+          <div class="panel-content">
+            <div id="keywordEditor"></div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="divider" id="divider"></div>
+
+      <div class="content">
+
+        <div class="panel preview-wrapper">
+          <div class="panel-header">Preview</div>
+          <div class="panel-content preview-wrapper">
+            <div id="preview" class="preview-box"></div>
+
+            <div class="progress">
+              <div id="progressFill" class="progress-fill"></div>
+            </div>
+
+            <div id="statusText" class="status">Ready.</div>
+          </div>
+        </div>
+
       </div>
 
     </div>
 
   </div>
 
-</div>
-
-<script src="renderer.js"></script>
-<script>
-function togglePanel(id){
+  <script src="renderer.js"></script>
+  <script>
+  function togglePanel(id){
   const panel = document.getElementById(id);
-  panel.classList.toggle("active");
+  const isActive = panel.classList.toggle("active");
+
+  const arrow = panel.querySelector(".arrow");
+  if (arrow) {
+    arrow.style.transform = isActive ? "rotate(180deg)" : "rotate(0deg)";
+  }
 }
-</script>
+  </script>
 </body>
+
 </html>

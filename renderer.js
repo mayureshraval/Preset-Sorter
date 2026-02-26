@@ -192,21 +192,29 @@ async function selectFolder() {
   if (!currentFolder) return;
 
   statusText.innerText = "Analyzing presets...";
+  progressFill.style.width = "0%";
+  previewDiv.innerHTML = "";
 
-  const response = await window.api.preview(
-    currentFolder,
-    null,
-    intelligenceMode
-  );
+  try {
+    fullPreviewData = await window.api.preview(currentFolder);
+  } catch (err) {
+    console.error(err);
+    statusText.innerText = "Error analyzing folder.";
+    return;
+  }
 
-  console.log("Preview response:", response);
+  if (!fullPreviewData.length) {
+    statusText.innerText = "No presets found.";
+    return;
+  }
 
-  fullPreviewData = response.results || [];
-  applyFilter();
+  filteredPreviewData = [...fullPreviewData];
 
-  statusText.innerText = `Ready. ${fullPreviewData.length} presets found.`;
+  statusText.innerText =
+    `${fullPreviewData.length} presets detected. Review before sorting.`;
+
+  renderPreview();
 }
-
 function getEnabledCategories() {
   return Array.from(
     document.querySelectorAll(".category-toggle:checked")
@@ -232,109 +240,51 @@ function applyFilter() {
 function renderPreview() {
   previewDiv.innerHTML = "";
 
+  if (!filteredPreviewData.length) return;
+
   const grouped = {};
 
   filteredPreviewData.forEach(item => {
-    if (!grouped[item.packRoot]) {
-      grouped[item.packRoot] = {};
-    }
-
-    if (!grouped[item.packRoot][item.category]) {
-      grouped[item.packRoot][item.category] = [];
-    }
-
-    grouped[item.packRoot][item.category].push(item);
+    if (!grouped[item.category]) grouped[item.category] = [];
+    grouped[item.category].push(item);
   });
 
-  Object.entries(grouped).forEach(([parent, categories]) => {
+  Object.entries(grouped).forEach(([category, items]) => {
 
-    const parentWrapper = document.createElement("div");
-    let parentOpen = true;
+    const wrapper = document.createElement("div");
 
-    const parentHeader = document.createElement("div");
-    parentHeader.style.cursor = "pointer";
-    parentHeader.style.fontWeight = "600";
-    parentHeader.innerText = `📂 ${parent}`;
+    const header = document.createElement("div");
+    header.className = "folder-header";
+    header.style.cursor = "pointer";
+    header.style.fontWeight = "600";
+    header.style.marginTop = "10px";
 
-    const parentContent = document.createElement("div");
-    parentContent.style.marginLeft = "15px";
+    let open = true;
+    header.textContent = `📂 ${category} (${items.length})`;
 
-    parentHeader.onclick = () => {
-      parentOpen = !parentOpen;
-      parentContent.style.display = parentOpen ? "block" : "none";
-      parentHeader.innerText = `${parentOpen ? "📂" : "📁"} ${parent}`;
+    const content = document.createElement("div");
+    content.style.marginLeft = "20px";
+
+    items.forEach(preset => {
+      const row = document.createElement("div");
+      row.className = "preview-row";
+      row.textContent = preset.file;
+      content.appendChild(row);
+    });
+
+    header.onclick = () => {
+      open = !open;
+      header.textContent =
+        `${open ? "📂" : "📁"} ${category} (${items.length})`;
+      content.style.display = open ? "block" : "none";
     };
 
-    Object.entries(categories).forEach(([category, items]) => {
-
-      let catOpen = true;
-
-      const catHeader = document.createElement("div");
-      catHeader.style.cursor = "pointer";
-      catHeader.style.fontWeight = "500";
-      catHeader.style.marginTop = "6px";
-      catHeader.innerText = `📂 ${category} (${items.length})`;
-
-      const catContent = document.createElement("div");
-      catContent.style.marginLeft = "15px";
-
-      catHeader.onclick = () => {
-        catOpen = !catOpen;
-        catContent.style.display = catOpen ? "block" : "none";
-        catHeader.innerText =
-          `${catOpen ? "📂" : "📁"} ${category} (${items.length})`;
-      };
-
-      items.forEach(preset => {
-        const row = document.createElement("div");
-        row.className = "preview-row";
-        row.textContent = preset.file;
-        catContent.appendChild(row);
-      });
-
-      parentContent.appendChild(catHeader);
-      parentContent.appendChild(catContent);
-    });
-
-    parentWrapper.appendChild(parentHeader);
-    parentWrapper.appendChild(parentContent);
-    previewDiv.appendChild(parentWrapper);
+    wrapper.appendChild(header);
+    wrapper.appendChild(content);
+    previewDiv.appendChild(wrapper);
   });
 }
-// ================= Controls =================
-const controls = document.createElement("div");
-controls.style.marginBottom = "12px";
 
-const expandBtn = document.createElement("button");
-expandBtn.textContent = "Expand All";
-expandBtn.style.marginRight = "8px";
-expandBtn.onclick = () => {
-  document.querySelectorAll(".folder-content")
-    .forEach(el => el.style.display = "block");
-
-  document.querySelectorAll(".folder-header")
-    .forEach(el => {
-      el.dataset.open = "true";
-      el.textContent = el.dataset.labelOpen;
-    });
-};
-
-const collapseBtn = document.createElement("button");
-collapseBtn.textContent = "Collapse All";
-collapseBtn.onclick = () => {
-  document.querySelectorAll(".folder-content")
-    .forEach(el => el.style.display = "none");
-
-  document.querySelectorAll(".folder-header")
-    .forEach(el => {
-      el.dataset.open = "false";
-      el.textContent = el.dataset.labelClosed;
-    });
-};
-
-controls.appendChild(expandBtn);
-controls.appendChild(collapseBtn);
-previewDiv.appendChild(controls);
 
 // ================= Group by Category =================
 const grouped = {};

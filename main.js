@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 const path = require("path");
+const { Worker } = require("worker_threads");
 const sorter = require("./sorter");
 
 let mainWindow;
@@ -33,12 +34,7 @@ ipcMain.handle("get-keywords", () => sorter.getKeywords());
 ipcMain.handle("save-keywords", (event, data) => sorter.saveKeywords(data));
 
 
-ipcMain.handle("preview-sort", async (event, folderPath, categories, intelligenceMode) => {
-  console.log("Preview handler triggered");
-  const result = sorter.previewSort(folderPath, categories, intelligenceMode);
-  console.log("Preview finished", result.results.length);
-  return result;
-});
+
 ipcMain.handle("undo-sort", () => {
   return sorter.undoLastMove();
 });
@@ -49,10 +45,21 @@ ipcMain.handle("restore-defaults", () => {
   return defaults;
 });
 
-ipcMain.handle("execute-sort", (event, folderPath, previewData, intelligenceMode) => {
-  return sorter.executeSort(folderPath, previewData, intelligenceMode,
+ ipcMain.handle("preview-sort", async (event, folderPath) => {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(path.join(__dirname, "scan-worker.js"), {
+      workerData: { folder: folderPath }
+    });
+
+    worker.on("message", resolve);
+    worker.on("error", reject);
+  });
+});
+
+ipcMain.handle("execute-sort", (event, folderPath, previewData) => {
+  return sorter.executeSort(
+    folderPath,
+    previewData,
     (progress) => mainWindow.webContents.send("sort-progress", progress)
   );
-
-  
 });
