@@ -2,7 +2,7 @@ const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 const path = require("path");
 const { Worker } = require("worker_threads");
 const sorter = require("./sorter");
-const { shell } = require("electron");
+const { Menu, shell } = require("electron");
 
 let mainWindow;
 
@@ -11,16 +11,87 @@ function createWindow() {
     width: 1000,
     height: 700,
     backgroundColor: "#111111",
+    icon: path.join(__dirname, "assets/icon.ico"), // 🔥 add this
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true
     }
   });
-
   mainWindow.loadFile("index.html");
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createWindow();
+  createMenu();
+});
+
+
+function createMenu() {
+  const template = [
+    {
+      label: "Help",
+      submenu: [
+        {
+          label: "About Preset Sorter Pro",
+          click: () => {
+            const aboutWindow = new BrowserWindow({
+              width: 520,
+              height: 500,
+              minWidth: 520,
+              minHeight: 500,
+              resizable: true,
+              parent: mainWindow,
+              modal: true,
+              title: "About Preset Sorter Pro",
+              webPreferences: {
+                nodeIntegration: true,
+                contextIsolation: false
+              }
+            });
+
+            aboutWindow.loadFile("about.html");
+          }
+        },
+        {
+          label: "Contact Support",
+          click: () => {
+            const subject = encodeURIComponent("Preset Sorter Pro - Support Request");
+
+            const body = encodeURIComponent(
+              `Hello,
+
+Please describe your issue clearly below:
+
+---------------------------------------
+What happened:
+
+What were you trying to do:
+
+Steps to reproduce:
+
+---------------------------------------
+
+Please attach screenshots if possible.
+
+App Version: ${app.getVersion()}
+OS: ${process.platform}
+
+Thank you,
+`
+            );
+
+            shell.openExternal(
+              `mailto:presetsorterpro@outlook.com?subject=${subject}&body=${body}`
+            );
+          }
+        }
+      ]
+    }
+  ];
+
+  const menu = Menu.buildFromTemplate(template);
+  Menu.setApplicationMenu(menu);
+}
 
 ipcMain.handle("choose-folder", async () => {
   const result = await dialog.showOpenDialog({
@@ -49,8 +120,8 @@ ipcMain.handle("restore-defaults", () => {
   sorter.saveKeywords(defaults);
   return defaults;
 });
-
- ipcMain.handle("preview-sort", async (event, folderPath) => {
+ipcMain.handle("get-version", () => app.getVersion());
+ipcMain.handle("preview-sort", async (event, folderPath) => {
   return new Promise((resolve, reject) => {
     const worker = new Worker(path.join(__dirname, "scan-worker.js"), {
       workerData: { folder: folderPath }

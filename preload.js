@@ -7,7 +7,7 @@ contextBridge.exposeInMainWorld("api", {
 
   chooseFolder: () =>
     ipcRenderer.invoke("choose-folder"),
-
+getVersion: () => ipcRenderer.invoke("get-version"),
  preview: (path, categories, intelligenceMode) =>
   ipcRenderer.invoke("preview-sort", path, categories, intelligenceMode),
 
