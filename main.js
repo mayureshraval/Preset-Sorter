@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 const path = require("path");
 const { Worker } = require("worker_threads");
 const sorter = require("./sorter");
+const { shell } = require("electron");
 
 let mainWindow;
 
@@ -33,7 +34,11 @@ ipcMain.handle("choose-folder", async () => {
 ipcMain.handle("get-keywords", () => sorter.getKeywords());
 ipcMain.handle("save-keywords", (event, data) => sorter.saveKeywords(data));
 
-
+ipcMain.handle("open-folder", (event, folderPath) => {
+  if (folderPath) {
+    shell.openPath(folderPath);
+  }
+});
 
 ipcMain.handle("undo-sort", () => {
   return sorter.undoLastMove();

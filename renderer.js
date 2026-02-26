@@ -50,6 +50,63 @@ function showEmptyState(message = "Select a folder to sort.") {
 }
 // 
 
+// sorted
+function showSortedState(sortedCount) {
+  previewDiv.innerHTML = "";
+
+  const wrapper = document.createElement("div");
+  wrapper.style.display = "flex";
+  wrapper.style.flexDirection = "column";
+  wrapper.style.alignItems = "center";
+  wrapper.style.justifyContent = "center";
+  wrapper.style.height = "100%";
+  wrapper.style.textAlign = "center";
+  wrapper.style.opacity = "0.9";
+
+  const icon = document.createElement("div");
+  icon.textContent = "✅";
+  icon.style.fontSize = "40px";
+  icon.style.marginBottom = "12px";
+
+  const title = document.createElement("div");
+  title.style.fontWeight = "700";
+  title.style.fontSize = "18px";
+  title.textContent = `Sorted ${sortedCount} presets successfully`;
+
+  const subtitle = document.createElement("div");
+  subtitle.style.fontSize = "13px";
+  subtitle.style.opacity = "0.6";
+  subtitle.style.marginTop = "6px";
+  subtitle.textContent = "You can now review the sorted folders.";
+
+  const button = document.createElement("button");
+  button.textContent = "Open Sorted Folder";
+  button.style.marginTop = "16px";
+
+  button.onclick = () => {
+    window.api.openFolder(currentFolder);
+  };
+
+  const newSessionBtn = document.createElement("button");
+  newSessionBtn.textContent = "Start New Session";
+  newSessionBtn.style.marginTop = "10px";
+
+  newSessionBtn.onclick = () => {
+    resetSession();
+  };
+
+  wrapper.appendChild(icon);
+  wrapper.appendChild(title);
+  wrapper.appendChild(subtitle);
+  wrapper.appendChild(button);
+  wrapper.appendChild(newSessionBtn);
+
+  previewDiv.appendChild(wrapper);
+
+  statusText.innerText = `Sorted ${sortedCount} presets.`;
+}
+// sorted
+
 // ================= INTELLIGENCE TOGGLE =================
 document.getElementById("intelligenceToggle")
   .addEventListener("change", e => {
@@ -388,14 +445,15 @@ async function startSort() {
     progressFill.style.width = val + "%";
   });
 
-  const count = await window.api.execute(
-    currentFolder,
-    filteredPreviewData,
-    intelligenceMode
-  );
+const count = await window.api.execute(
+  currentFolder,
+  filteredPreviewData
+);
 
-  statusText.innerText = `Sorted ${count} presets.`;
-  isSorting = false;
+isSorting = false;
+progressFill.style.width = "100%";
+
+showSortedState(count);
 }
 
 
