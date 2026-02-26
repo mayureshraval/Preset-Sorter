@@ -33,6 +33,13 @@
       overflow: hidden;
     }
 
+    .hint {
+      margin-top: 8px;
+      font-size: 12px;
+      opacity: 0.6;
+      line-height: 1.4;
+    }
+
     .arrow {
       transition: transform 0.2s ease;
     }
@@ -428,7 +435,12 @@
           </div>
           <div class="panel-content">
             <input type="checkbox" id="intelligenceToggle">
-            Enable intelligent rename
+            Enable intelligent metadata detection
+
+            <div class="hint">
+              Detects BPM, musical key, and mood from preset filenames.
+              Displays them in preview before sorting.
+            </div>
           </div>
         </div>
 
@@ -469,15 +481,15 @@
 
   <script src="renderer.js"></script>
   <script>
-  function togglePanel(id){
-  const panel = document.getElementById(id);
-  const isActive = panel.classList.toggle("active");
+    function togglePanel(id) {
+      const panel = document.getElementById(id);
+      const isActive = panel.classList.toggle("active");
 
-  const arrow = panel.querySelector(".arrow");
-  if (arrow) {
-    arrow.style.transform = isActive ? "rotate(180deg)" : "rotate(0deg)";
-  }
-}
+      const arrow = panel.querySelector(".arrow");
+      if (arrow) {
+        arrow.style.transform = isActive ? "rotate(180deg)" : "rotate(0deg)";
+      }
+    }
   </script>
 </body>
 

@@ -12,8 +12,8 @@ const progressFill = document.getElementById("progressFill");
 document.getElementById("intelligenceToggle")
   .addEventListener("change", e => {
     intelligenceMode = e.target.checked;
+    renderPreview(); // 🔥 re-render immediately
   });
-
 // ================= INIT =================
 initUI();
 

@@ -1,6 +1,6 @@
 const fs = require("fs").promises;
 const path = require("path");
-
+const { detectPresetMetadata } = require("./intelligence");
 const keywordsPath = path.join(__dirname, "keywords.json");
 const logPath = path.join(__dirname, "move-log.json");
 
@@ -58,7 +58,7 @@ async function resolveDuplicate(destPath) {
 async function previewSort(sourceDir) {
   const keywords = await getKeywords();
   const results = [];
- const categoryNames = Object.keys(keywords).filter(k => k !== "_meta");
+  const categoryNames = Object.keys(keywords).filter(k => k !== "_meta");
 
   async function scan(dir) {
     let files;
@@ -82,9 +82,22 @@ async function previewSort(sourceDir) {
       if (stat.isDirectory()) {
         if (categoryNames.includes(file)) continue; // ignore sorted folders
         await scan(fullPath);
-      } else if (file.toLowerCase().endsWith(".fxp") || file.toLowerCase().endsWith(".fxb")) {
+      } 
+      else if (
+        file.toLowerCase().endsWith(".fxp") ||
+        file.toLowerCase().endsWith(".fxb")
+      ) {
         const category = getBestCategory(file, keywords);
-        results.push({ from: fullPath, file, category });
+
+        // 🔥 Intelligence metadata detection
+        const intelligence = detectPresetMetadata(file);
+
+        results.push({
+          from: fullPath,
+          file,
+          category,
+          intelligence
+        });
       }
     }
   }
