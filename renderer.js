@@ -8,6 +8,48 @@ const statusText = document.getElementById("statusText");
 const previewDiv = document.getElementById("preview");
 const progressFill = document.getElementById("progressFill");
 
+
+
+
+// 
+function showEmptyState(message = "Select a folder to sort.") {
+  previewDiv.innerHTML = "";
+
+  const wrapper = document.createElement("div");
+  wrapper.style.display = "flex";
+  wrapper.style.flexDirection = "column";
+  wrapper.style.alignItems = "center";
+  wrapper.style.justifyContent = "center";
+  wrapper.style.height = "100%";
+  wrapper.style.textAlign = "center";
+  wrapper.style.opacity = "0.85";
+
+  const icon = document.createElement("div");
+  icon.textContent = "📂";
+  icon.style.fontSize = "40px";
+  icon.style.marginBottom = "12px";
+
+  const title = document.createElement("div");
+  title.style.fontWeight = "700";
+  title.style.fontSize = "18px";
+  title.textContent = message;
+
+  const subtitle = document.createElement("div");
+  subtitle.style.fontSize = "13px";
+  subtitle.style.opacity = "0.6";
+  subtitle.style.marginTop = "6px";
+  subtitle.textContent = "Choose a preset folder to begin analysis.";
+
+  wrapper.appendChild(icon);
+  wrapper.appendChild(title);
+  wrapper.appendChild(subtitle);
+
+  previewDiv.appendChild(wrapper);
+
+  statusText.innerText = message;
+}
+// 
+
 // ================= INTELLIGENCE TOGGLE =================
 document.getElementById("intelligenceToggle")
   .addEventListener("change", e => {
@@ -21,6 +63,7 @@ async function initUI() {
   const keywords = await window.api.getKeywords();
   renderCategoryToggles(keywords);
   renderKeywordEditor(keywords);
+  showEmptyState();
 }
 // ================= RESIZABLE SIDEBAR =================
 
@@ -189,7 +232,11 @@ function renderKeywordEditor(keywords) {
 // ================= SELECT FOLDER =================
 async function selectFolder() {
   currentFolder = await window.api.chooseFolder();
-  if (!currentFolder) return;
+
+  if (!currentFolder) {
+  showEmptyState();
+  return;
+}
 
   statusText.innerText = "Analyzing presets...";
   progressFill.style.width = "0%";
@@ -358,8 +405,14 @@ async function undo() {
   if (isSorting) return;
 
   const count = await window.api.undo();
-  statusText.innerText = `Undo restored ${count} presets.`;
+
+  currentFolder = null;
+  fullPreviewData = [];
+  filteredPreviewData = [];
+
   progressFill.style.width = "0%";
+
+  showEmptyState(`Undo restored ${count} presets. Select a folder to sort.`);
 }
 
 // reset session 
