@@ -340,6 +340,63 @@ function applyFilter() {
   renderPreview();
 }
 
+// showundostate
+function showUndoState(restoredCount) {
+  previewDiv.innerHTML = "";
+
+  const wrapper = document.createElement("div");
+  wrapper.style.display = "flex";
+  wrapper.style.flexDirection = "column";
+  wrapper.style.alignItems = "center";
+  wrapper.style.justifyContent = "center";
+  wrapper.style.height = "100%";
+  wrapper.style.textAlign = "center";
+  wrapper.style.opacity = "0.9";
+
+  const icon = document.createElement("div");
+  icon.textContent = "↩️";
+  icon.style.fontSize = "40px";
+  icon.style.marginBottom = "12px";
+
+  const title = document.createElement("div");
+  title.style.fontWeight = "700";
+  title.style.fontSize = "18px";
+  title.textContent = `Undo restored ${restoredCount} presets`;
+
+  const subtitle = document.createElement("div");
+  subtitle.style.fontSize = "13px";
+  subtitle.style.opacity = "0.6";
+  subtitle.style.marginTop = "6px";
+  subtitle.textContent = "Your original folder structure has been restored.";
+
+  const openBtn = document.createElement("button");
+  openBtn.textContent = "Open Restored Folder";
+  openBtn.style.marginTop = "16px";
+
+  openBtn.onclick = () => {
+    window.api.openFolder(currentFolder);
+  };
+
+  const newSessionBtn = document.createElement("button");
+  newSessionBtn.textContent = "Start New Session";
+  newSessionBtn.style.marginTop = "10px";
+
+  newSessionBtn.onclick = () => {
+    resetSession();
+  };
+
+  wrapper.appendChild(icon);
+  wrapper.appendChild(title);
+  wrapper.appendChild(subtitle);
+  wrapper.appendChild(openBtn);
+  wrapper.appendChild(newSessionBtn);
+
+  previewDiv.appendChild(wrapper);
+
+  statusText.innerText = `Undo restored ${restoredCount} presets.`;
+}
+// showundostate
+
 // ================= PREVIEW =================
 function renderPreview() {
   previewDiv.innerHTML = "";
@@ -462,17 +519,24 @@ showSortedState(count);
 async function undo() {
   if (isSorting) return;
 
+  const folderBeforeUndo = currentFolder;
+
   const count = await window.api.undo();
 
-  currentFolder = null;
+  // 🔥 UX TIP GOES RIGHT HERE
+  if (count === 0) {
+    showEmptyState("Nothing to undo.");
+    return;
+  }
+
   fullPreviewData = [];
   filteredPreviewData = [];
-
   progressFill.style.width = "0%";
 
-  showEmptyState(`Undo restored ${count} presets. Select a folder to sort.`);
-}
+  currentFolder = folderBeforeUndo;
 
+  showUndoState(count);
+}
 // reset session 
 function resetSession() {
   currentFolder = null;
