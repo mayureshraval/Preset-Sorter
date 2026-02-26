@@ -242,12 +242,29 @@ function renderPreview() {
 
   if (!filteredPreviewData.length) return;
 
+  // ===== Controls =====
+  const controls = document.createElement("div");
+  controls.style.marginBottom = "12px";
+
+  const expandBtn = document.createElement("button");
+  expandBtn.textContent = "Expand All";
+  expandBtn.style.marginRight = "8px";
+
+  const collapseBtn = document.createElement("button");
+  collapseBtn.textContent = "Collapse All";
+
+  controls.appendChild(expandBtn);
+  controls.appendChild(collapseBtn);
+  previewDiv.appendChild(controls);
+
   const grouped = {};
 
   filteredPreviewData.forEach(item => {
     if (!grouped[item.category]) grouped[item.category] = [];
     grouped[item.category].push(item);
   });
+
+  const folderElements = [];
 
   Object.entries(grouped).forEach(([category, items]) => {
 
@@ -259,10 +276,14 @@ function renderPreview() {
     header.style.fontWeight = "600";
     header.style.marginTop = "10px";
 
-    let open = true;
-    header.textContent = `📂 ${category} (${items.length})`;
+    header.dataset.open = "true";
+    header.dataset.labelOpen = `📂 ${category} (${items.length})`;
+    header.dataset.labelClosed = `📁 ${category} (${items.length})`;
+
+    header.textContent = header.dataset.labelOpen;
 
     const content = document.createElement("div");
+    content.className = "folder-content";
     content.style.marginLeft = "20px";
 
     items.forEach(preset => {
@@ -273,107 +294,42 @@ function renderPreview() {
     });
 
     header.onclick = () => {
-      open = !open;
-      header.textContent =
-        `${open ? "📂" : "📁"} ${category} (${items.length})`;
-      content.style.display = open ? "block" : "none";
+      const open = header.dataset.open === "true";
+      header.dataset.open = (!open).toString();
+      header.textContent = open
+        ? header.dataset.labelClosed
+        : header.dataset.labelOpen;
+      content.style.display = open ? "none" : "block";
     };
 
     wrapper.appendChild(header);
     wrapper.appendChild(content);
     previewDiv.appendChild(wrapper);
+
+    folderElements.push({ header, content });
   });
+
+  // Expand All
+  expandBtn.onclick = () => {
+    folderElements.forEach(({ header, content }) => {
+      header.dataset.open = "true";
+      header.textContent = header.dataset.labelOpen;
+      content.style.display = "block";
+    });
+  };
+
+  // Collapse All
+  collapseBtn.onclick = () => {
+    folderElements.forEach(({ header, content }) => {
+      header.dataset.open = "false";
+      header.textContent = header.dataset.labelClosed;
+      content.style.display = "none";
+    });
+  };
 }
 
 
-// ================= Group by Category =================
-const grouped = {};
 
-filteredPreviewData.forEach(item => {
-  if (!grouped[item.category]) grouped[item.category] = [];
-  grouped[item.category].push(item);
-});
-
-Object.entries(grouped).forEach(([category, items]) => {
-  const wrapper = document.createElement("div");
-
-  const header = document.createElement("div");
-  header.className = "folder-header";
-  header.style.cursor = "pointer";
-  header.style.fontWeight = "600";
-  header.style.marginTop = "10px";
-
-  header.dataset.open = "true";
-  header.dataset.labelOpen = `📂 ${category} (${items.length})`;
-  header.dataset.labelClosed = `📁 ${category} (${items.length})`;
-
-  header.textContent = header.dataset.labelOpen;
-
-  const content = document.createElement("div");
-  content.className = "folder-content";
-  content.style.marginLeft = "20px";
-
-  items.forEach(preset => {
-    const row = document.createElement("div");
-    row.className = "preview-row";
-    row.style.display = "flex";
-    row.style.justifyContent = "space-between";
-    row.style.alignItems = "center";
-
-    const nameDiv = document.createElement("div");
-    nameDiv.textContent = preset.file;
-
-    const badgeContainer = document.createElement("div");
-    badgeContainer.style.display = "flex";
-    badgeContainer.style.gap = "6px";
-
-    if (intelligenceMode && preset.intelligence) {
-      const intel = preset.intelligence;
-
-      if (intel.key) {
-        const keyBadge = document.createElement("span");
-        keyBadge.className = "category-tag";
-        keyBadge.style.background = "#00aaff";
-        keyBadge.textContent = intel.key.toUpperCase();
-        badgeContainer.appendChild(keyBadge);
-      }
-
-      if (intel.bpm) {
-        const bpmBadge = document.createElement("span");
-        bpmBadge.className = "category-tag";
-        bpmBadge.style.background = "#ffaa00";
-        bpmBadge.textContent = `${intel.bpm} BPM`;
-        badgeContainer.appendChild(bpmBadge);
-      }
-
-      if (intel.mood) {
-        const moodBadge = document.createElement("span");
-        moodBadge.className = "category-tag";
-        moodBadge.style.background = "#9b59b6";
-        moodBadge.textContent = intel.mood;
-        badgeContainer.appendChild(moodBadge);
-      }
-    }
-
-    row.appendChild(nameDiv);
-    row.appendChild(badgeContainer);
-    content.appendChild(row);
-  });
-
-  header.onclick = () => {
-    const open = header.dataset.open === "true";
-    header.dataset.open = (!open).toString();
-    header.textContent = open
-      ? header.dataset.labelClosed
-      : header.dataset.labelOpen;
-    content.style.display = open ? "none" : "block";
-  };
-
-  wrapper.appendChild(header);
-  wrapper.appendChild(content);
-  previewDiv.appendChild(wrapper);
-});
-// ================= START SORT =================
 async function startSort() {
   if (!filteredPreviewData.length || isSorting) return;
 
@@ -395,6 +351,8 @@ async function startSort() {
   isSorting = false;
 }
 
+
+
 // ================= UNDO =================
 async function undo() {
   if (isSorting) return;
@@ -402,4 +360,16 @@ async function undo() {
   const count = await window.api.undo();
   statusText.innerText = `Undo restored ${count} presets.`;
   progressFill.style.width = "0%";
+}
+
+// reset session 
+function resetSession() {
+  currentFolder = null;
+  fullPreviewData = [];
+  filteredPreviewData = [];
+  isSorting = false;
+
+  previewDiv.innerHTML = "";
+  progressFill.style.width = "0%";
+  statusText.innerText = "Ready.";
 }
