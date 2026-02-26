@@ -544,7 +544,7 @@ function resetSession() {
   filteredPreviewData = [];
   isSorting = false;
 
-  previewDiv.innerHTML = "";
   progressFill.style.width = "0%";
-  statusText.innerText = "Ready.";
+
+  showEmptyState("Select a folder to sort.");
 }
