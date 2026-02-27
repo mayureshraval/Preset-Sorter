@@ -13,6 +13,28 @@
 
 ---
 
+## ⬇️ Download
+
+If you don’t want to build the project from source, download the precompiled Windows `.exe` from the official GitHub release:
+
+### 🔗 Official Release
+https://github.com/mayureshraval/Preset-Sorter/releases/tag/DownloadApp
+
+**How to download:**
+1. Open the link above  
+2. Scroll to the **Assets** section  
+3. Click the `.exe` file  
+
+---
+
+### 🔄 Alternative Download (No Sign-In Required)
+
+If GitHub blocks, throttles, or fails to download:
+
+OneDrive Mirror:  
+https://1drv.ms/u/c/8f3b9ef19923c791/IQCagcIKIhSCRpY0-8lOXsodAWpiSXTW28PBBqduRvlNTQw?e=DcqdAr
+
+---
 ## 📖 Overview
 
 Preset Sorter Pro is a native Windows desktop application built with Electron that scans folders of `.fxp` and `.fxb` preset files and automatically organizes them into intelligent category-based subfolders. Whether you have hundreds of synth patches scattered across your drive or a chaotic preset library, Preset Sorter Pro analyzes each filename and sorts it into the right place — in seconds.
@@ -223,4 +245,4 @@ Under the condition that any distributed version — modified or not — is also
 
 See the [LICENSE](LICENSE) file for the full license text, or read it at [gnu.org/licenses/gpl-3.0](https://www.gnu.org/licenses/gpl-3.0).
 
-© 2024 Mayuresh Rawal
+© 2026 Mayuresh Rawal
