@@ -84,21 +84,87 @@ async function getDefaultSampleKeywords() {
   return kw;
 }
 
+// ─── Levenshtein distance for typo tolerance ─────────────────────────────────
+function levenshtein(a, b) {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+  const m = [];
+  for (let i = 0; i <= b.length; i++) m[i] = [i];
+  for (let j = 0; j <= a.length; j++) m[0][j] = j;
+  for (let i = 1; i <= b.length; i++)
+    for (let j = 1; j <= a.length; j++)
+      m[i][j] = b[i-1] === a[j-1] ? m[i-1][j-1]
+        : 1 + Math.min(m[i-1][j-1], m[i][j-1], m[i-1][j]);
+  return m[b.length][a.length];
+}
+
+// ─── Abbreviation / shorthand expansion table ─────────────────────────────────
+// Maps producer shorthand codes to canonical keyword equivalents.
+// "kck" → "kick", "808" → "bass", "hihaat" (typo) → "hihat", etc.
+// This is the AI-like prediction layer — when a segment is in this table
+// it gets treated as if the full canonical word was written.
+const SAMPLE_ABBREV_MAP = {
+  // Kicks
+  "kck": "kick", "kik": "kick", "kk": "kick", "bd": "kick", "kd": "kick",
+  // Bass / 808
+  "bss": "bass", "bs": "bass", "808": "bass", "sub": "bass",
+  // Snare
+  "sn": "snare", "snr": "snare", "sd": "snare", "snare": "snare",
+  // HiHat — including common typos
+  "hh": "hihat", "hat": "hihat", "oh": "hihat", "ch": "hihat",
+  "hihaat": "hihat", "hihat": "hihat", "hiHat": "hihat",
+  // Clap
+  "clp": "clap", "cp": "clap",
+  // Percussion — abbrevs + plural
+  "prc": "percussion", "perc": "percussion", "percs": "percussion",
+  "prcs": "percussion",
+  // Vocal
+  "vox": "vocal", "voc": "vocal",
+  // FX
+  "sfx": "fx",
+  // Loops / Drums
+  "drm": "drum", "dl": "drum loop", "lp": "loop",
+  // Instruments
+  "mel": "melody", "arp": "arp", "cho": "chord",
+  "amb": "ambience", "atm": "ambience",
+  "gt": "guitar", "gtr": "guitar",
+  "pno": "piano", "kbd": "piano",
+  "str": "strings", "brs": "brass",
+  "tom": "tom", "cym": "cymbal",
+  // Texture (common producer label)
+  "textue": "texture", "textur": "texture", "tex": "texture",
+};
+
+function expandSampleAbbrev(seg) {
+  const s = seg.toLowerCase().trim();
+  return SAMPLE_ABBREV_MAP[s] || s;
+}
+
+// ─── Intelligent sample category scorer ──────────────────────────────────────
+// Full pipeline:
+//   1. Abbreviation expansion  ("kck" → treated as "kick")
+//   2. All-segment scanning    (middle segments like "drum loop" now count)
+//   3. Typo fuzzy matching     ("textue" → matches "texture" within 1 edit)
+//   4. Metadata boost          (if intelligence mode found key/bpm, boosts confidence)
+//   5. Piecewise confidence    (calibrated curve, not a flat linear cap)
+//
 function getBestSampleCategory(filename, keywords, metadata) {
   // MIDI always wins immediately
-  if (isMidi(filename)) return "MIDI";
+  if (isMidi(filename)) return { category: "MIDI", score: 100, confidence: 100 };
 
   const nameRaw  = stripSampleExtension(filename).toLowerCase();
-  const name     = nameRaw.replace(/[_\-\.]+/g, " ").trim();
-  // Segments split on separators - gives strong suffix/prefix signals
-  // e.g. "ADORE_84_A_MAJ_BASS" -> segments include "bass" as last
-  const segments = nameRaw.split(/[_\-\.]+/).map(s => s.trim()).filter(Boolean);
-  const lastSeg  = segments[segments.length - 1] || "";
-  const firstSeg = segments[0] || "";
+  // Normalize ALL common separators including "=" which producers use
+  const name     = nameRaw.replace(/[_\-\.=\(\)\[\]]+/g, " ").trim();
+  // Split on all separators to get individual meaningful segments
+  // "rqm = kck = link" → ["rqm", "kck", "link"]
+  // "RQM - drum loop - 40acres (84 bpm)" → ["rqm", "drum loop", "40acres", "84 bpm"]
+  const segments = nameRaw.split(/[_\-\.=\(\)\[\]]+/).map(s => s.trim()).filter(Boolean);
+  const firstSeg = (segments[0] || "").toLowerCase();
+  const lastSeg  = (segments[segments.length - 1] || "").toLowerCase();
 
-  const prefixMatch = name.match(/^([a-z]{2,4})\s/);
-  const filePrefix  = prefixMatch ? prefixMatch[1] : null;
-  const suffixSeg   = lastSeg.toLowerCase();
+  // Pre-expand every segment through the abbreviation table
+  const expandedSegs = segments.map(expandSampleAbbrev);
 
   let bestCategory = null;
   let highestScore = 0;
@@ -108,42 +174,130 @@ function getBestSampleCategory(filename, keywords, metadata) {
 
     const allWords = [...(data.default || []), ...(data.custom || [])];
     let score = 0;
+    const seen = new Set();
 
-    for (const word of allWords) {
-      const w = word.toLowerCase().replace(/^[\s_]+|[\s_]+$/g, "").trim();
-      if (!w) continue;
+    for (const rawWord of allWords) {
+      const w = rawWord.toLowerCase().replace(/^[\s_]+|[\s_]+$/g, "").trim();
+      if (!w || seen.has(w)) continue;
+      seen.add(w);
+      const wl = w.length;
 
-      const wordLen = w.length;
+      // ── TIER 1: Abbreviation expansion match ─────────────────────────────
+      // Any segment that expands to this keyword → extremely strong signal
+      // e.g. "kck" expands to "kick" → matches Kick category
+      let abbrevHit = false;
+      for (let i = 0; i < segments.length; i++) {
+        if (expandedSegs[i] === w) {
+          // Position bonus: suffix strongest, prefix next, middle weakest
+          const pos = i === segments.length - 1 ? 20 : i === 0 ? 12 : 8;
+          score += 60 + pos;
+          abbrevHit = true;
+          break;
+        }
+      }
+      if (abbrevHit) continue;
+
+      // ── TIER 2: Raw segment exact match ──────────────────────────────────
+      // A segment is exactly the keyword (e.g. "perc" segment → Percussion)
+      let segExact = false;
+      for (let i = 0; i < segments.length; i++) {
+        if (segments[i] === w) {
+          const pos = i === segments.length - 1 ? 20 : i === 0 ? 12 : 8;
+          score += 65 + pos;
+          segExact = true;
+          break;
+        }
+      }
+      if (segExact) continue;
+
+      // ── TIER 3: Segment contains multi-word keyword ───────────────────────
+      // e.g. segment "drum loop" contains keyword "drum loop"
+      let containsHit = false;
+      if (wl > 3) {
+        for (const seg of segments) {
+          if (seg.includes(w)) {
+            score += 50;
+            containsHit = true;
+            break;
+          }
+        }
+      }
+      if (containsHit) continue;
+
+      // ── TIER 4: Typo / fuzzy match on any segment ────────────────────────
+      // Allows 1 edit for 5-6 char keywords, 2 edits for 7+ char keywords
+      // Catches: "textue"→"texture", "hihaat"→"hihat", "percs"→"perc" etc.
+      let fuzzyHit = false;
+      if (wl >= 5) {
+        const maxEdits = wl <= 6 ? 1 : 2;
+        for (const seg of segments) {
+          if (Math.abs(seg.length - wl) > maxEdits + 1) continue; // skip obviously wrong lengths
+          const dist = levenshtein(seg, w);
+          if (dist <= maxEdits && dist > 0) {
+            // Score scales by confidence: 1 edit = 70% of exact, 2 edits = 45%
+            const base = 55 + wl;
+            score += Math.round(base * (dist === 1 ? 0.75 : 0.50));
+            fuzzyHit = true;
+            break;
+          }
+        }
+      }
+      if (fuzzyHit) continue;
+
+      // ── TIER 5: Word-boundary match in full normalized name ───────────────
       const escaped = w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-      // PREFIX CODE MATCH (e.g. "BD " -> Kick)
-      if (filePrefix && filePrefix === w) { score += 60; continue; }
-
-      // SUFFIX SEGMENT EXACT (strongest: "_BASS" at end of filename)
-      if (suffixSeg === w) { score += 70; continue; }
-
-      // SUFFIX SEGMENT CONTAINS (e.g. "_PLUCKED STRINGS" includes "strings")
-      if (wordLen > 3 && suffixSeg.includes(w)) { score += 40; continue; }
-
-      // WORD-BOUNDARY MATCH in full name
       const matched = new RegExp(`(?<![a-z0-9])${escaped}(?![a-z0-9])`, "i").test(name);
       if (matched) {
-        if      (wordLen <= 2) score += 2;
-        else if (wordLen <= 4) score += 6;
-        else if (wordLen <= 7) score += 8 + wordLen;
-        else                   score += 12 + wordLen;
-      } else if (wordLen > 5 && name.includes(w)) {
-        score += 2;
+        score += wl <= 2 ? 2 : wl <= 4 ? 10 : wl <= 7 ? (14 + wl) : (18 + wl);
+      } else if (wl > 5 && name.includes(w)) {
+        score += 3;
       }
-
-      // FIRST SEGMENT BONUS
-      if (wordLen >= 3 && firstSeg === w) { score += 20; }
     }
 
-    if (score > highestScore) { highestScore = score; bestCategory = category; }
+    if (score > highestScore) {
+      highestScore = score;
+      bestCategory = category;
+    }
   }
 
-  return (highestScore > 0 ? bestCategory : null) || "Misc";
+  // ── Metadata confidence boost ─────────────────────────────────────────────
+  // When intelligence mode has extracted real key/BPM data, we have more
+  // signal — add a small boost to reward the higher-quality prediction.
+  let metaBoost = 0;
+  if (metadata) {
+    if (metadata.bpm)  metaBoost += 5;
+    if (metadata.key)  metaBoost += 5;
+    if (metadata.mood) metaBoost += 3;
+  }
+
+  const category = (highestScore > 0 ? bestCategory : null) || "Misc";
+  const finalScore = highestScore + metaBoost;
+
+  // ── Piecewise confidence curve ────────────────────────────────────────────
+  // Calibrated so each tier reads intuitively:
+  //   Abbreviation hit (75-85 pts)  → 87-97%
+  //   Exact segment (73-85 pts)     → 85-97%
+  //   Contains phrase (50 pts)      → 80%
+  //   Fuzzy typo (~40-50 pts)       → 72-80%
+  //   Word boundary long (32+ pts)  → 65-75%
+  //   Word boundary short (10 pts)  → 40%
+  //   Zero score                    → 0%
+  let confidence;
+  if (category === "Misc" && highestScore === 0) {
+    confidence = 0;
+  } else if (finalScore >= 90) {
+    confidence = Math.min(100, 95 + Math.round((finalScore - 90) / 5));
+  } else if (finalScore >= 60) {
+    confidence = 80 + Math.round(((finalScore - 60) / 30) * 15);
+  } else if (finalScore >= 30) {
+    confidence = 60 + Math.round(((finalScore - 30) / 30) * 20);
+  } else if (finalScore >= 10) {
+    confidence = 35 + Math.round(((finalScore - 10) / 20) * 25);
+  } else {
+    confidence = Math.round((finalScore / 10) * 35);
+  }
+
+  return { category, score: highestScore, confidence };
 }
 
 // ─── Audio Metadata Reading ───────────────────────────────────────────────────
@@ -541,8 +695,6 @@ async function resolveSampleDuplicate(destPath) {
 async function previewSampleSort(sourceDir, intelligenceMode = false, progressCallback = null) {
   const keywords      = await getSampleKeywords();
   const results       = [];
-  const categoryNames = Object.keys(keywords).filter(k => k !== "_meta");
-
   // ── Pass 1: count all sample files (fast — no metadata reads) ──────────────
   let totalFiles = 0;
   async function countFiles(dir) {
@@ -553,7 +705,7 @@ async function previewSampleSort(sourceDir, intelligenceMode = false, progressCa
       let stat;
       try { stat = await fs.stat(fullPath); } catch { continue; }
       if (stat.isDirectory()) {
-        if (!categoryNames.includes(file)) await countFiles(fullPath);
+        await countFiles(fullPath);
       } else if (isSampleExtension(file)) {
         totalFiles++;
       }
@@ -574,7 +726,6 @@ async function previewSampleSort(sourceDir, intelligenceMode = false, progressCa
       try { stat = await fs.stat(fullPath); } catch { continue; }
 
       if (stat.isDirectory()) {
-        if (categoryNames.includes(file)) continue;
         await scan(fullPath);
       } else if (isSampleExtension(file)) {
         // Read binary audio metadata
@@ -589,12 +740,13 @@ async function previewSampleSort(sourceDir, intelligenceMode = false, progressCa
         }
 
         const sampleType = detectSampleType(file, metadata.durationSec);
-        const category   = getBestSampleCategory(file, keywords, metadata);
+        const { category, confidence } = getBestSampleCategory(file, keywords, metadata);
 
         results.push({
           from:  fullPath,
           file,
           category,
+          confidence,
           metadata,
           sampleType,
           ext:   getSampleExtension(file)
@@ -614,42 +766,61 @@ async function previewSampleSort(sourceDir, intelligenceMode = false, progressCa
 }
 
 // ─── Execute sort ─────────────────────────────────────────────────────────────
-// ─── Build the destination folder name based on active key filter ─────────────
-// keyFilter shape:  { mode: "all"|"major"|"minor"|"notes", notes: ["Am","C#"] }
+// ─── Build the key-filter parent folder name ─────────────────────────────────
+// When a key filter is active we create ONE parent folder named after the
+// source folder + key label, then put clean category subfolders inside it.
 //
-// Resulting folder names:
-//   mode="all"    →  "Bass Loop"           (normal, no suffix)
-//   mode="major"  →  "Bass Loop [Major]"
-//   mode="minor"  →  "Bass Loop [Minor]"
-//   mode="notes", notes=["Am"]         → "Bass Loop [Am]"
-//   mode="notes", notes=["Am","C#m"]   → "Bass Loop [Am, C#m]"
-function buildDestFolderName(category, keyFilter) {
-  if (!keyFilter || keyFilter.mode === "all") return category;
+// Structure when mode = "all":
+//   SourceFolder/
+//     Bass Loop/
+//     Kick/
+//
+// Structure when mode = "major" / "minor" / specific notes:
+//   SourceFolder/
+//     SourceFolder [Major]/      ← parent = sourceDirName + key label
+//       Bass Loop/               ← category folders clean, no suffix
+//       Kick/
+//
+// This keeps the sorted output isolated and tidy — nothing gets dumped
+// alongside the original unsorted files.
 
-  let suffix = "";
+function buildKeyParentName(sourceDir, keyFilter) {
+  if (!keyFilter || keyFilter.mode === "all") return null;
+
+  const sourceName = path.basename(sourceDir);
+  let label = "";
+
   if (keyFilter.mode === "major") {
-    suffix = "Major";
+    label = "Major";
   } else if (keyFilter.mode === "minor") {
-    suffix = "Minor";
+    label = "Minor";
   } else if (keyFilter.mode === "notes" && keyFilter.notes?.length) {
-    suffix = keyFilter.notes.join(", ");
+    label = keyFilter.notes.join(", ");
   }
 
-  return suffix ? `${category} [${suffix}]` : category;
+  return label ? `${sourceName} [${label}]` : null;
 }
 
 async function executeSampleSort(sourceDir, previewData, progressCallback, keyFilter) {
   const moved          = [];
   const createdFolders = new Set();
 
+  // When a key filter is active, all sorted files go inside a dedicated
+  // parent folder: SourceFolder/SourceFolder [Am]/Category/file.wav
+  const keyParentName = buildKeyParentName(sourceDir, keyFilter);
+  const sortRoot      = keyParentName
+    ? path.join(sourceDir, keyParentName)
+    : sourceDir;
+
   for (let i = 0; i < previewData.length; i++) {
     const item       = previewData[i];
-    const folderName = buildDestFolderName(item.category, keyFilter);
-    const folderPath = path.join(sourceDir, folderName);
+    // Category folder is always clean (no key suffix) — the parent carries the label
+    const folderPath = path.join(sortRoot, item.category);
 
     try {
       await fs.mkdir(folderPath, { recursive: true });
       createdFolders.add(folderPath);
+      if (keyParentName) createdFolders.add(sortRoot);
 
       let dest = path.join(folderPath, item.file);
       dest     = await resolveSampleDuplicate(dest);

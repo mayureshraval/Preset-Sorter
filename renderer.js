@@ -189,14 +189,19 @@ function updateSortFolderHintEl(el) {
     el.textContent = "";
     return;
   }
-  let desc = "";
-  if (keyFilter.mode === "major") desc = "Sorting into: Category [Major]";
-  else if (keyFilter.mode === "minor") desc = "Sorting into: Category [Minor]";
-  else if (keyFilter.mode === "notes" && keyFilter.notes.size > 0) {
-    const labels = [...keyFilter.notes].join(", ");
-    desc = `Sorting into: Category [${labels}]`;
-  }
-  el.textContent = desc;
+
+  let label = "";
+  if      (keyFilter.mode === "major") label = "Major";
+  else if (keyFilter.mode === "minor") label = "Minor";
+  else if (keyFilter.mode === "notes" && keyFilter.notes.size > 0)
+    label = [...keyFilter.notes].join(", ");
+
+  if (!label) { el.textContent = ""; return; }
+
+  const folderBase = currentFolder
+    ? currentFolder.split(/[\\/]/).pop()
+    : "Sorted";
+  el.textContent = `↳ ${folderBase} [${label}]  →  Category  →  files`;
 }
 
 // ================= SYNTH TAG MAPPING =================
@@ -964,10 +969,35 @@ function showUndoState(restoredCount) {
 let currentView = "list"; // "list" | "grid" | "columns"
 
 
+// ── Confidence badge — shared across both modes and all 3 views ─────────────
+// Maps 0-100 confidence integer to a coloured pill badge.
+// Colors: 0%=grey, 1-25%=red, 26-45%=orange, 46-65%=yellow, 66-85%=green, 86-100%=bright green
+function buildConfidenceBadge(confidence) {
+  if (confidence === undefined || confidence === null) return null;
+  const pct = Math.max(0, Math.min(100, Math.round(confidence)));
+  const el = document.createElement("span");
+  el.className = "confidence-badge";
+  el.textContent = pct + "%";
+  el.title = `Sort confidence: ${pct}%`;
+
+  if      (pct === 0)  el.dataset.tier = "none";
+  else if (pct <= 25)  el.dataset.tier = "low";
+  else if (pct <= 45)  el.dataset.tier = "medium-low";
+  else if (pct <= 65)  el.dataset.tier = "medium";
+  else if (pct <= 85)  el.dataset.tier = "high";
+  else                 el.dataset.tier = "perfect";
+
+  return el;
+}
+
 // ── Build sample metadata tags row (shared across all 3 view modes) ─────────
 function buildSampleTagsWrap(preset) {
   const wrap = document.createElement("span");
   wrap.style.cssText = "display:inline-flex; align-items:center; gap:3px; flex-shrink:0;";
+
+  // Confidence badge — first, most prominent
+  const confBadge = buildConfidenceBadge(preset.confidence);
+  if (confBadge) wrap.appendChild(confBadge);
 
   // Extension badge
   const extBadge = document.createElement("span");
@@ -1011,15 +1041,27 @@ function buildSampleTagsWrap(preset) {
 }
 
 
-// Returns the folder display name with key suffix when a key filter is active
+// Returns the folder display path shown in preview.
+// When a key filter is active the structure is:
+//   SourceFolderName [Am] / Category
+// so the user sees exactly what will be created on disk.
 function getDisplayFolderName(category) {
   if (appMode !== "sample" || keyFilter.mode === "all") return category;
-  if (keyFilter.mode === "major")  return `${category} [Major]`;
-  if (keyFilter.mode === "minor")  return `${category} [Minor]`;
-  if (keyFilter.mode === "notes" && keyFilter.notes.size > 0) {
-    return `${category} [${[...keyFilter.notes].join(", ")}]`;
-  }
-  return category;
+
+  let label = "";
+  if      (keyFilter.mode === "major") label = "Major";
+  else if (keyFilter.mode === "minor") label = "Minor";
+  else if (keyFilter.mode === "notes" && keyFilter.notes.size > 0)
+    label = [...keyFilter.notes].join(", ");
+
+  if (!label) return category;
+
+  // Show as  "FolderName [Am]  /  Category"  so it reads like a path
+  const parentName = currentFolder
+    ? `${currentFolder.split(/[\\/]/).pop()} [${label}]`
+    : `Sorted [${label}]`;
+
+  return `${parentName}  /  ${category}`;
 }
 
 function renderPreview() {
@@ -1159,8 +1201,11 @@ function renderPreview() {
         } else {
           const tagsWrap = document.createElement("span");
           tagsWrap.style.cssText = "display:inline-flex; align-items:center; gap:3px; flex-shrink:0;";
+          const confP = buildConfidenceBadge(preset.confidence);
+          if (confP) tagsWrap.appendChild(confP);
           const tagEl = createSynthTagEl(preset);
-          if (tagEl) { tagsWrap.appendChild(tagEl); row.appendChild(tagsWrap); }
+          if (tagEl) tagsWrap.appendChild(tagEl);
+          if (tagsWrap.children.length) row.appendChild(tagsWrap);
         }
         filesDiv.appendChild(row);
       });
@@ -1226,6 +1271,8 @@ function renderPreview() {
           tagsWrap.style.cssText = "display:flex; flex-wrap:wrap; gap:3px; align-items:center;";
           chip.appendChild(tagsWrap);
         } else {
+          const confG = buildConfidenceBadge(preset.confidence);
+          if (confG) { confG.style.marginLeft = "0"; chip.appendChild(confG); }
           const tagEl = createSynthTagEl(preset);
           if (tagEl) { tagEl.style.marginLeft = "0"; chip.appendChild(tagEl); }
         }
@@ -1296,8 +1343,13 @@ function renderPreview() {
           nameSpan.textContent = stripDisplayExtension(preset.file);
           nameSpan.style.cssText = "flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
           row.appendChild(nameSpan);
+          const colTagsC = document.createElement("span");
+          colTagsC.style.cssText = "display:inline-flex; align-items:center; gap:3px; flex-shrink:0;";
+          const confC = buildConfidenceBadge(preset.confidence);
+          if (confC) colTagsC.appendChild(confC);
           const tagEl = createSynthTagEl(preset);
-          if (tagEl) row.appendChild(tagEl);
+          if (tagEl) colTagsC.appendChild(tagEl);
+          if (colTagsC.children.length) row.appendChild(colTagsC);
         }
 
         filesDiv.appendChild(row);

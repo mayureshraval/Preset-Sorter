@@ -962,6 +962,60 @@
     }
 
     /* Hidden panels for inactive mode */
+    /* ═══════════════ CONFIDENCE BADGE ═══════════════ */
+    .confidence-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      font-variant-numeric: tabular-nums;
+      min-width: 36px;
+      flex-shrink: 0;
+      border: 1px solid transparent;
+      cursor: default;
+    }
+    /* 0% — unrecognized, grey */
+    .confidence-badge[data-tier="none"] {
+      background: rgba(100,100,100,0.15);
+      color: #555;
+      border-color: #333;
+    }
+    /* 1-25% — red, very weak match */
+    .confidence-badge[data-tier="low"] {
+      background: rgba(200,40,40,0.20);
+      color: #e05555;
+      border-color: rgba(200,40,40,0.38);
+    }
+    /* 26-45% — orange, weak */
+    .confidence-badge[data-tier="medium-low"] {
+      background: rgba(210,110,20,0.20);
+      color: #e08830;
+      border-color: rgba(210,110,20,0.38);
+    }
+    /* 46-65% — yellow, moderate */
+    .confidence-badge[data-tier="medium"] {
+      background: rgba(195,170,10,0.20);
+      color: #ccb020;
+      border-color: rgba(195,170,10,0.38);
+    }
+    /* 66-85% — green, strong */
+    .confidence-badge[data-tier="high"] {
+      background: rgba(80,185,60,0.20);
+      color: #60c848;
+      border-color: rgba(80,185,60,0.38);
+    }
+    /* 86-100% — bright green, very confident */
+    .confidence-badge[data-tier="perfect"] {
+      background: rgba(40,210,90,0.22);
+      color: #30e870;
+      border-color: rgba(40,210,90,0.45);
+      box-shadow: 0 0 6px rgba(40,210,90,0.18);
+    }
+
     .hidden-panel { display: none !important; }
 
     /* ================= HORIZONTAL DIVIDER (narrow/stacked mode) ================= */
