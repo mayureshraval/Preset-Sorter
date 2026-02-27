@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>About Preset Sorter Pro</title>
+<style>
+  body {
+    font-family: "Segoe UI", sans-serif;
+    background: #111;
+    color: white;
+    padding: 20px;
+    text-align: center;
+  }
+  h2 {
+    margin-bottom: 10px;
+  }
+  .meta {
+    opacity: 0.8;
+    margin: 6px 0;
+  }
+  a {
+    color: #9400D3;
+    text-decoration: none;
+  }
+  a:hover {
+    text-decoration: underline;
+  }
+</style>
+</head>
+<body>
+
+<h2>Preset Sorter Pro</h2>
+
+<div class="meta"><strong>Version:</strong> <span id="version"></span></div>
+<div class="meta"><strong>Developer:</strong> Mayuresh Rawal</div>
+<div class="meta"><strong>Email:</strong> presetsorterpro@outlook.com</div>
+
+<br>
+
+<button id="donateBtn" style="
+  margin-top:20px;
+  padding:10px 20px;
+  background:#9400D3;
+  border:none;
+  color:white;
+  border-radius:6px;
+  cursor:pointer;
+  font-size:14px;
+">
+  Donate via PayPal
+</button>
+
+<script>
+  const { ipcRenderer, shell } = require("electron");
+
+  ipcRenderer.invoke("get-version").then(v => {
+    document.getElementById("version").innerText = v;
+  });
+
+  document.getElementById("donateBtn").addEventListener("click", () => {
+    shell.openExternal("https://www.paypal.com/ncp/payment/3ZDDHX6KCHTCE");
+  });
+</script>
+
+</body>
+</html>
