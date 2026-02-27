@@ -1,17 +1,21 @@
 const fs = require("fs").promises;
 const path = require("path");
-const { app } = require("electron").default || require("electron");
+const os = require("os");
 const { detectPresetMetadata } = require("./intelligence");
 
 const keywordsPath = path.join(__dirname, "keywords.json");
 
+// Lazy-require electron so this module works correctly when loaded
+// from the main process in a packaged asar build.
 function getLogPath() {
   try {
+    const { app } = require("electron");
     return path.join(app.getPath("userData"), "move-log.json");
   } catch {
-    return path.join(require("os").homedir(), ".preset-sorter-move-log.json");
+    return path.join(os.homedir(), ".preset-sorter-move-log.json");
   }
 }
+
 
 async function getKeywords() {
   const data = await fs.readFile(keywordsPath, "utf-8");

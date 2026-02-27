@@ -8,9 +8,21 @@ const statusText = document.getElementById("statusText");
 const previewDiv = document.getElementById("preview");
 const progressFill = document.getElementById("progressFill");
 
+// Clears click-to-browse behaviour set by showEmptyState
+function clearPreviewInteractivity() {
+  previewDiv.onclick = null;
+  previewDiv.onmouseenter = null;
+  previewDiv.onmouseleave = null;
+  previewDiv.style.cursor = "";
+  previewDiv.style.borderColor = "";
+}
+
 // ================= EMPTY STATE =================
-function showEmptyState(message = "Select a folder to sort.") {
+function showEmptyState(message = "Ready") {
   previewDiv.innerHTML = "";
+
+  // The whole preview box becomes a clickable drop zone
+  previewDiv.style.cursor = "pointer";
 
   const wrapper = document.createElement("div");
   wrapper.style.display = "flex";
@@ -20,33 +32,83 @@ function showEmptyState(message = "Select a folder to sort.") {
   wrapper.style.height = "100%";
   wrapper.style.textAlign = "center";
   wrapper.style.opacity = "0.85";
+  wrapper.style.pointerEvents = "none"; // clicks pass through to previewDiv
 
   const icon = document.createElement("div");
   icon.textContent = "📂";
-  icon.style.fontSize = "40px";
-  icon.style.marginBottom = "12px";
+  icon.style.fontSize = "48px";
+  icon.style.marginBottom = "16px";
+  icon.style.transition = "transform 0.2s ease";
 
   const title = document.createElement("div");
   title.style.fontWeight = "700";
-  title.style.fontSize = "18px";
-  title.textContent = message;
+  title.style.fontSize = "17px";
+  title.style.color = "var(--lavender)";
+  title.textContent = "Click or drop a folder here";
+
+  const dividerLine = document.createElement("div");
+  dividerLine.style.cssText = `
+    display: flex; align-items: center; gap: 10px;
+    margin: 14px 0; width: 220px; opacity: 0.3;
+  `;
+  const line1 = document.createElement("div");
+  line1.style.cssText = "flex:1; height:1px; background:currentColor;";
+  const orText = document.createElement("span");
+  orText.style.cssText = "font-size:11px; letter-spacing:1px;";
+  orText.textContent = "OR";
+  const line2 = document.createElement("div");
+  line2.style.cssText = "flex:1; height:1px; background:currentColor;";
+  dividerLine.appendChild(line1);
+  dividerLine.appendChild(orText);
+  dividerLine.appendChild(line2);
 
   const subtitle = document.createElement("div");
-  subtitle.style.fontSize = "13px";
-  subtitle.style.opacity = "0.6";
-  subtitle.style.marginTop = "6px";
-  subtitle.textContent = "Choose a preset folder to begin analysis.";
+  subtitle.style.fontSize = "12px";
+  subtitle.style.opacity = "0.5";
+  subtitle.textContent = "Use the Select Folder button above";
 
-  wrapper.appendChild(icon);
-  wrapper.appendChild(title);
-  wrapper.appendChild(subtitle);
+  if (message !== "Ready") {
+    const note = document.createElement("div");
+    note.style.cssText = `
+      margin-top: 18px; font-size: 12px;
+      color: var(--accent); opacity: 0.8;
+    `;
+    note.textContent = message;
+    wrapper.appendChild(icon);
+    wrapper.appendChild(title);
+    wrapper.appendChild(dividerLine);
+    wrapper.appendChild(subtitle);
+    wrapper.appendChild(note);
+  } else {
+    wrapper.appendChild(icon);
+    wrapper.appendChild(title);
+    wrapper.appendChild(dividerLine);
+    wrapper.appendChild(subtitle);
+  }
+
   previewDiv.appendChild(wrapper);
+  statusText.innerText = "Ready.";
 
-  statusText.innerText = message;
+  // Click anywhere on the preview box to open folder picker
+  previewDiv.onclick = async () => {
+    if (isSorting) return;
+    await selectFolder();
+  };
+
+  // Hover effect — lift the icon
+  previewDiv.onmouseenter = () => {
+    icon.style.transform = "translateY(-4px)";
+    previewDiv.style.borderColor = "rgba(148, 0, 211, 0.5)";
+  };
+  previewDiv.onmouseleave = () => {
+    icon.style.transform = "translateY(0)";
+    previewDiv.style.borderColor = "";
+  };
 }
 
 // ================= SORTED STATE =================
 function showSortedState(sortedCount) {
+  clearPreviewInteractivity();
   previewDiv.innerHTML = "";
 
   const wrapper = document.createElement("div");
@@ -153,6 +215,106 @@ document.addEventListener("DOMContentLoaded", () => {
     localStorage.setItem("sidebarWidth", sidebar.style.width);
   });
 });
+
+
+// ================= DRAG AND DROP =================
+// Must run after DOM is ready. We attach to the whole window so the user
+// can drop anywhere on the app, not just on the preview box.
+// Electron does NOT allow reading drag-dropped file paths via the normal
+// DataTransfer.files API for security reasons — we read the path from
+// the dragged item's `path` property which Electron exposes on File objects.
+
+(function initDragDrop() {
+  const previewBox = document.getElementById("preview");
+  let dragCounter = 0; // counter prevents flicker when dragging over child elements
+
+  // Prevent default browser behaviour for drag events on the whole window
+  window.addEventListener("dragover",  (e) => e.preventDefault());
+  window.addEventListener("drop",      (e) => e.preventDefault());
+
+  window.addEventListener("dragenter", (e) => {
+    e.preventDefault();
+    dragCounter++;
+    if (dragCounter === 1) showDropOverlay();
+  });
+
+  window.addEventListener("dragleave", (e) => {
+    e.preventDefault();
+    dragCounter--;
+    if (dragCounter === 0) hideDropOverlay();
+  });
+
+  window.addEventListener("drop", async (e) => {
+    e.preventDefault();
+    dragCounter = 0;
+    hideDropOverlay();
+
+    if (isSorting) return;
+
+    // Electron exposes the real filesystem path on the File object as .path
+    const files = Array.from(e.dataTransfer.files);
+    if (!files.length) return;
+
+    // Take the first item — if it's a folder its .path is the folder path
+    const droppedPath = files[0].path;
+    if (!droppedPath) return;
+
+    // Verify it's actually a directory using a stat call via the folder open
+    // We simply try to use it as a folder — previewSort will fail gracefully
+    // if it's a file. A more robust check would require an IPC call.
+    // For now, filter: if the name has an extension it's a file, skip it.
+    const hasExtension = /\.[a-zA-Z0-9]{1,5}$/.test(files[0].name);
+    if (hasExtension) {
+      statusText.innerText = "Please drop a folder, not a file.";
+      return;
+    }
+
+    currentFolder = droppedPath;
+    statusText.innerText = "Analyzing presets...";
+    progressFill.style.width = "0%";
+    previewBox.innerHTML = "";
+
+    try {
+      fullPreviewData = await window.api.preview(currentFolder);
+    } catch (err) {
+      console.error(err);
+      statusText.innerText = "Error analyzing folder.";
+      return;
+    }
+
+    if (!fullPreviewData.length) {
+      statusText.innerText = "No presets found in dropped folder.";
+      return;
+    }
+
+    filteredPreviewData = [...fullPreviewData];
+    statusText.innerText = `${fullPreviewData.length} presets detected. Review before sorting.`;
+    renderPreview();
+  });
+
+  function showDropOverlay() {
+    previewBox.classList.add("drag-over");
+
+    // Only show overlay if there's no active preview (don't clobber it)
+    if (!fullPreviewData.length) {
+      previewBox.innerHTML = `
+        <div class="drop-overlay">
+          <div class="drop-icon">📂</div>
+          <div class="drop-label">Drop folder here</div>
+          <div class="drop-sub">Release to load your preset folder</div>
+        </div>`;
+    }
+  }
+
+  function hideDropOverlay() {
+    previewBox.classList.remove("drag-over");
+
+    // Restore empty state if we showed the overlay and there's still no data
+    if (!fullPreviewData.length) {
+      showEmptyState();
+    }
+  }
+})();
 
 // ================= CATEGORY TOGGLES =================
 function renderCategoryToggles(keywords) {
@@ -300,6 +462,7 @@ function applyFilter() {
 
 // ================= UNDO STATE =================
 function showUndoState(restoredCount) {
+  clearPreviewInteractivity();
   previewDiv.innerHTML = "";
 
   const wrapper = document.createElement("div");
@@ -349,6 +512,7 @@ function showUndoState(restoredCount) {
 
 // ================= PREVIEW =================
 function renderPreview() {
+  clearPreviewInteractivity();
   previewDiv.innerHTML = "";
 
   if (!filteredPreviewData.length) return;

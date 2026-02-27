@@ -1,6 +1,5 @@
 const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require("electron");
 const path = require("path");
-const { Worker } = require("worker_threads");
 const sorter = require("./sorter");
 
 let mainWindow;
@@ -79,7 +78,6 @@ ipcMain.handle("choose-folder", async () => {
 
 ipcMain.handle("get-keywords", () => sorter.getKeywords());
 
-// 🔥 FIX: saveKeywords now calls the real sorter function (was crashing before)
 ipcMain.handle("save-keywords", (event, data) => sorter.saveKeywords(data));
 
 ipcMain.handle("open-folder", (event, folderPath) => {
@@ -88,39 +86,17 @@ ipcMain.handle("open-folder", (event, folderPath) => {
 
 ipcMain.handle("undo-sort", () => sorter.undoLastMove());
 
-// 🔥 FIX: getDefaultKeywords now calls the real sorter function (was crashing before)
 ipcMain.handle("restore-defaults", () => sorter.getDefaultKeywords());
 
 ipcMain.handle("get-version", () => app.getVersion());
 
+// 🔥 FIX: Removed Worker thread entirely.
+// Workers cannot load modules from inside a packaged asar archive,
+// which caused "Error analyzing folder" in the built exe.
+// Running previewSort directly in the main process is perfectly safe —
+// IPC calls are already async so the renderer UI stays responsive.
 ipcMain.handle("preview-sort", async (event, folderPath) => {
-  return new Promise((resolve, reject) => {
-    // 🔥 FIX: In a packaged asar build, __dirname points inside the archive.
-    // worker_threads cannot load files from inside an asar. We must use
-    // app.getAppPath() to find the real on-disk location of scan-worker.js,
-    // OR we can inline the work directly in the main process to avoid the
-    // worker path issue entirely. Inlining is the safest cross-platform fix.
-    //
-    // We keep the worker approach but resolve the path correctly:
-    const workerPath = app.isPackaged
-      ? path.join(process.resourcesPath, "app", "scan-worker.js")
-      : path.join(__dirname, "scan-worker.js");
-
-    const worker = new Worker(workerPath, {
-      workerData: { folder: folderPath }
-    });
-
-    worker.on("message", resolve);
-    worker.on("error", reject);
-
-    // 🔥 FIX: if worker exits without messaging (crash/unhandled error),
-    // reject the promise so the UI doesn't hang forever
-    worker.on("exit", (code) => {
-      if (code !== 0) {
-        reject(new Error(`Scan worker exited with code ${code}`));
-      }
-    });
-  });
+  return sorter.previewSort(folderPath);
 });
 
 ipcMain.handle("execute-sort", (event, folderPath, previewData) => {
