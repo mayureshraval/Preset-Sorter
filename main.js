@@ -104,6 +104,8 @@ ipcMain.handle("undo-sort", () => sorter.undoLastMove());
 
 ipcMain.handle("restore-defaults", () => sorter.getDefaultKeywords());
 
+ipcMain.handle("get-supported-extensions", () => sorter.getSupportedExtensions());
+
 ipcMain.handle("get-version", () => app.getVersion());
 
 // 🔥 FIX: Removed Worker thread entirely.

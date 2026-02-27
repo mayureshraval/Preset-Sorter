@@ -43,6 +43,9 @@ getVersion: () => ipcRenderer.invoke("get-version"),
   restoreDefaults: () =>
     ipcRenderer.invoke("restore-defaults"),
 
+  getSupportedExtensions: () =>
+    ipcRenderer.invoke("get-supported-extensions"),
+
   onProgress: (callback) => {
     ipcRenderer.removeAllListeners("sort-progress");
     ipcRenderer.on("sort-progress", (_, value) => callback(value));

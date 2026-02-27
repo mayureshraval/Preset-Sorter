@@ -20,6 +20,154 @@ let filteredPreviewData = [];
 let intelligenceMode = false;
 let isSorting = false;
 
+// ================= SYNTH TAG MAPPING =================
+// For .fxp/.fxb files the tag comes from the binary plugin ID read in sorter.js
+// (e.g. "SERUM", "MASSIVE", "SYLENTH1"). This map is used as a fallback for
+// formats that have their own dedicated extension (Vital, Kontakt, etc.).
+
+// Synth brand colors — used for both binary-identified and extension-identified synths
+const SYNTH_COLORS = {
+  // Identified from FXP binary header
+  "SERUM":        "#00e5ff",
+  "SERUM 2":      "#00b8d4",
+  "MASSIVE":      "#e040fb",
+  "MASSIVE X":    "#ab47bc",
+  "SYLENTH1":     "#ff9800",
+  "SPIRE":        "#ff7043",
+  "PREDATOR 2":   "#9c27b0",
+  "NEXUS":        "#42a5f5",
+  "VANGUARD":     "#26c6da",
+  "PIGMENTS":     "#ec407a",
+  "DIVA":         "#8bc34a",
+  "ZEBRA 2":      "#66bb6a",
+  "HIVE":         "#7cb342",
+  "REPRO-1":      "#aed581",
+  "REPRO-5":      "#aed581",
+  "BAZILLE":      "#81c784",
+  "ACE":          "#a5d6a7",
+  "OMNISPHERE":   "#ff5722",
+  "ATMOSPHERE":   "#ff7043",
+  "TRILIAN":      "#ff8a65",
+  "STYLUS RMX":   "#ffab91",
+  "ICARUS":       "#ffd54f",
+  "AVENGER":      "#f44336",
+  "DUNE 3":       "#26a69a",
+  "OB-XD":        "#ffc107",
+  "TAL-NOISEMAKER": "#78909c",
+  "TAL-U-NO-LX":  "#90a4ae",
+  "ALCHEMY":      "#80cbc4",
+  "MOVEMENT":     "#4db6ac",
+  "BLADE":        "#ba68c8",
+  "HELM":         "#a5d6a7",
+  "MICROTONIC":   "#ffcc80",
+  "Z3TA+ 2":      "#ce93d8",
+  // Extension-based fallbacks (non-FXP formats)
+  "VST3":         "#78909c",
+  "VITAL":        "#00bcd4",
+  "VITAL BANK":   "#0097a7",
+  "KONTAKT":      "#f44336",
+  "PATCHWORK":    "#26c6da",
+  "PHASE PLANT":  "#00acc1",
+  "ROB PAPEN":    "#9c27b0",
+  "ABLETON":      "#4db6ac",
+  "AU":           "#90a4ae",
+  "SFZ":          "#a5d6a7",
+  "U-HE":         "#8bc34a",
+  "HIVE 2":       "#7cb342",
+};
+
+// Extension → label for non-FXP formats (FXP is handled via binary pluginName)
+const EXT_FALLBACK_LABEL = {
+  ".vstpreset":  "VST3",
+  ".vital":      "VITAL",
+  ".vitalbank":  "VITAL BANK",
+  ".nmsv":       "MASSIVE",
+  ".ksd":        "MASSIVE",
+  ".nmspresetx": "MASSIVE X",
+  ".spf":        "SYLENTH1",
+  ".h2p":        "U-HE",
+  ".hypr":       "HIVE 2",
+  ".omnisphere": "OMNISPHERE",
+  ".patchwork":  "PATCHWORK",
+  ".phase":      "PHASE PLANT",
+  ".nki":        "KONTAKT",
+  ".nkb":        "KONTAKT",
+  ".nkc":        "KONTAKT",
+  ".nkr":        "KONTAKT",
+  ".xpf":        "ROB PAPEN",
+  ".obxd":       "OB-XD",
+  ".adg":        "ABLETON",
+  ".adv":        "ABLETON",
+  ".aupreset":   "AU",
+  ".sfz":        "SFZ",
+};
+
+/**
+ * Returns { label, color } for a preset item.
+ * Priority: binary-identified pluginName > extension fallback > null
+ */
+function getSynthInfo(preset) {
+  // 1. Use name from binary FXP header if available
+  if (preset.pluginName) {
+    const color = SYNTH_COLORS[preset.pluginName] || "#90a4ae";
+    return { label: preset.pluginName, color };
+  }
+
+  // 2. Fall back to extension map for non-FXP formats
+  const lower = preset.file.toLowerCase();
+  const sorted = Object.keys(EXT_FALLBACK_LABEL).sort((a, b) => b.length - a.length);
+  for (const ext of sorted) {
+    if (lower.endsWith(ext)) {
+      const label = EXT_FALLBACK_LABEL[ext];
+      const color = SYNTH_COLORS[label] || "#90a4ae";
+      return { label, color };
+    }
+  }
+
+  return null;
+}
+
+/** Strips known preset extension from a filename for display. */
+function stripDisplayExtension(filename) {
+  const lower = filename.toLowerCase();
+  const allExts = [
+    ".nmspresetx", ".vitalbank", ".vstpreset", ".omnisphere",
+    ".patchwork", ".aupreset", ".vital", ".nmsv", ".ksd", ".h2p",
+    ".hypr", ".phase", ".nki", ".nkb", ".nkc", ".nkr", ".xpf",
+    ".obxd", ".adg", ".adv", ".sfz", ".spf", ".fxp", ".fxb"
+  ];
+  for (const ext of allExts) {
+    if (lower.endsWith(ext)) return filename.slice(0, filename.length - ext.length);
+  }
+  return filename;
+}
+
+/** Creates a styled synth tag <span> element for a preset item. */
+function createSynthTagEl(preset) {
+  const info = getSynthInfo(preset);
+  if (!info) return null;
+  const el = document.createElement("span");
+  el.className = "synth-tag";
+  el.textContent = info.label;
+  el.style.cssText = `
+    display: inline-block;
+    margin-left: 7px;
+    padding: 1px 7px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    border-radius: 3px;
+    background: ${info.color}22;
+    color: ${info.color};
+    border: 1px solid ${info.color}55;
+    vertical-align: middle;
+    white-space: nowrap;
+    flex-shrink: 0;
+    user-select: none;
+  `;
+  return el;
+}
+
 const statusText = document.getElementById("statusText");
 const previewDiv = document.getElementById("preview");
 const progressFill = document.getElementById("progressFill");
@@ -719,7 +867,16 @@ function renderPreview() {
       items.forEach(preset => {
         const row = document.createElement("div");
         row.className = "file-row";
-        row.textContent = preset.file;
+        row.style.cssText = "display:flex; align-items:center; justify-content:space-between;";
+
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = preset.file;
+        nameSpan.style.cssText = "flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
+        row.appendChild(nameSpan);
+
+        const tagEl = createSynthTagEl(preset);
+        if (tagEl) row.appendChild(tagEl);
+
         filesDiv.appendChild(row);
       });
 
@@ -771,9 +928,19 @@ function renderPreview() {
       items.forEach(preset => {
         const chip = document.createElement("div");
         chip.className = "file-chip";
-        // Show name without extension for compactness
-        chip.textContent = preset.file.replace(/\.(fxp|fxb)$/i, "");
         chip.title = preset.file;
+        chip.style.cssText = "display:flex; flex-direction:column; align-items:flex-start; gap:4px;";
+
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = stripDisplayExtension(preset.file);
+        chip.appendChild(nameSpan);
+
+        const tagEl = createSynthTagEl(preset);
+        if (tagEl) {
+          tagEl.style.marginLeft = "0";
+          chip.appendChild(tagEl);
+        }
+
         filesDiv.appendChild(chip);
       });
 
@@ -820,8 +987,17 @@ function renderPreview() {
       items.forEach(preset => {
         const row = document.createElement("div");
         row.className = "file-row";
-        row.textContent = preset.file.replace(/\.(fxp|fxb)$/i, "");
         row.title = preset.file;
+        row.style.cssText = "display:flex; align-items:center; justify-content:space-between; gap:6px;";
+
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = stripDisplayExtension(preset.file);
+        nameSpan.style.cssText = "flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
+        row.appendChild(nameSpan);
+
+        const tagEl = createSynthTagEl(preset);
+        if (tagEl) row.appendChild(tagEl);
+
         filesDiv.appendChild(row);
       });
 
