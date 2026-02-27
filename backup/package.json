@@ -17,7 +17,13 @@
     "productName": "Preset Sorter Pro",
     "win": {
       "icon": "assets/icon.ico"
-    }
+    },
+    "extraResources": [
+      {
+        "from": "scan-worker.js",
+        "to": "app/scan-worker.js"
+      }
+    ]
   },
 
   "devDependencies": {

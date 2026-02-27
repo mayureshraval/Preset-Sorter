@@ -15,15 +15,60 @@
   "build": {
     "appId": "com.mayuresh.presetsorter",
     "productName": "Preset Sorter Pro",
+
+    "asar": true,
+    "compression": "maximum",
+
+    "files": [
+      "main.js",
+      "preload.js",
+      "sorter.js",
+      "intelligence.js",
+      "renderer.js",
+      "index.html",
+      "about.html",
+      "keywords.json",
+      "config.json",
+      "assets/**/*",
+      "package.json",
+      "!node_modules/**/*",
+      "!**/*.map",
+      "!**/*.md",
+      "!**/*.txt",
+      "!**/*.ts",
+      "!**/*.d.ts",
+      "!**/LICENSE",
+      "!**/CHANGELOG*",
+      "!**/README*",
+      "!dist/**",
+      "!out/**",
+      "!release/**",
+      "!.git/**",
+      "!scan-worker.js"
+    ],
+
     "win": {
-      "icon": "assets/icon.ico"
+      "icon": "assets/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ]
     },
-    "extraResources": [
-      {
-        "from": "scan-worker.js",
-        "to": "app/scan-worker.js"
-      }
-    ]
+
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+
+    "electronLanguages": ["en-US"],
+
+    "directories": {
+      "output": "release"
+    }
   },
 
   "devDependencies": {

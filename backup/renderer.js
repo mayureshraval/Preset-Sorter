@@ -8,10 +8,7 @@ const statusText = document.getElementById("statusText");
 const previewDiv = document.getElementById("preview");
 const progressFill = document.getElementById("progressFill");
 
-
-
-
-// 
+// ================= EMPTY STATE =================
 function showEmptyState(message = "Select a folder to sort.") {
   previewDiv.innerHTML = "";
 
@@ -43,14 +40,12 @@ function showEmptyState(message = "Select a folder to sort.") {
   wrapper.appendChild(icon);
   wrapper.appendChild(title);
   wrapper.appendChild(subtitle);
-
   previewDiv.appendChild(wrapper);
 
   statusText.innerText = message;
 }
-// 
 
-// sorted
+// ================= SORTED STATE =================
 function showSortedState(sortedCount) {
   previewDiv.innerHTML = "";
 
@@ -82,37 +77,30 @@ function showSortedState(sortedCount) {
   const button = document.createElement("button");
   button.textContent = "Open Sorted Folder";
   button.style.marginTop = "16px";
-
-  button.onclick = () => {
-    window.api.openFolder(currentFolder);
-  };
+  button.onclick = () => window.api.openFolder(currentFolder);
 
   const newSessionBtn = document.createElement("button");
   newSessionBtn.textContent = "Start New Session";
   newSessionBtn.style.marginTop = "10px";
-
-  newSessionBtn.onclick = () => {
-    resetSession();
-  };
+  newSessionBtn.onclick = () => resetSession();
 
   wrapper.appendChild(icon);
   wrapper.appendChild(title);
   wrapper.appendChild(subtitle);
   wrapper.appendChild(button);
   wrapper.appendChild(newSessionBtn);
-
   previewDiv.appendChild(wrapper);
 
   statusText.innerText = `Sorted ${sortedCount} presets.`;
 }
-// sorted
 
 // ================= INTELLIGENCE TOGGLE =================
 document.getElementById("intelligenceToggle")
   .addEventListener("change", e => {
     intelligenceMode = e.target.checked;
-    renderPreview(); // 🔥 re-render immediately
+    renderPreview();
   });
+
 // ================= INIT =================
 initUI();
 
@@ -122,10 +110,9 @@ async function initUI() {
   renderKeywordEditor(keywords);
   showEmptyState();
 }
+
 // ================= RESIZABLE SIDEBAR =================
-
 document.addEventListener("DOMContentLoaded", () => {
-
   const divider = document.getElementById("divider");
   const sidebar = document.getElementById("sidebar");
   const main = document.querySelector(".main");
@@ -136,31 +123,23 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   const savedWidth = localStorage.getItem("sidebarWidth");
-  if (savedWidth) {
-    sidebar.style.width = savedWidth;
-  }
+  if (savedWidth) sidebar.style.width = savedWidth;
 
   let isDragging = false;
 
   divider.addEventListener("mousedown", (e) => {
     e.preventDefault();
     isDragging = true;
-
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
   });
 
   document.addEventListener("mousemove", (e) => {
     if (!isDragging) return;
-
     const mainRect = main.getBoundingClientRect();
-    const containerWidth = mainRect.width;
-
     const newWidth = e.clientX - mainRect.left;
-
     const minWidth = 220;
-    const maxWidth = containerWidth - 220; // leave minimum space for preview
-
+    const maxWidth = mainRect.width - 220;
     if (newWidth >= minWidth && newWidth <= maxWidth) {
       sidebar.style.width = newWidth + "px";
     }
@@ -168,23 +147,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.addEventListener("mouseup", () => {
     if (!isDragging) return;
-
     isDragging = false;
     document.body.style.cursor = "default";
     document.body.style.userSelect = "auto";
-
     localStorage.setItem("sidebarWidth", sidebar.style.width);
   });
-
 });
+
 // ================= CATEGORY TOGGLES =================
 function renderCategoryToggles(keywords) {
   const panel = document.getElementById("categoryPanel");
   panel.innerHTML = "";
 
   Object.entries(keywords).forEach(([cat]) => {
-
-    if (cat === "_meta") return; // 🔥 ignore meta
+    if (cat === "_meta") return;
 
     const label = document.createElement("label");
     label.innerHTML = `
@@ -197,6 +173,7 @@ function renderCategoryToggles(keywords) {
   document.querySelectorAll(".category-toggle")
     .forEach(cb => cb.addEventListener("change", applyFilter));
 }
+
 // ================= KEYWORD EDITOR =================
 function renderKeywordEditor(keywords) {
   const container = document.getElementById("keywordEditor");
@@ -215,20 +192,14 @@ function renderKeywordEditor(keywords) {
     const tagContainer = document.createElement("div");
     tagContainer.className = "keyword-tag-container";
 
-    // ===== DEFAULT KEYWORDS =====
     data.default.forEach(word => {
       const tag = document.createElement("div");
       tag.className = "keyword-tag default active";
       tag.innerText = word;
-
-      tag.onclick = () => {
-        tag.classList.toggle("active");
-      };
-
+      tag.onclick = () => tag.classList.toggle("active");
       tagContainer.appendChild(tag);
     });
 
-    // ===== CUSTOM KEYWORDS =====
     data.custom.forEach(word => {
       const tag = document.createElement("div");
       tag.className = "keyword-tag custom active";
@@ -239,7 +210,6 @@ function renderKeywordEditor(keywords) {
       const remove = document.createElement("span");
       remove.innerText = "✕";
       remove.className = "remove-btn";
-
       remove.onclick = (e) => {
         e.stopPropagation();
         data.custom = data.custom.filter(w => w !== word);
@@ -247,10 +217,7 @@ function renderKeywordEditor(keywords) {
         renderKeywordEditor(keywords);
       };
 
-      tag.onclick = () => {
-        tag.classList.toggle("active");
-      };
-
+      tag.onclick = () => tag.classList.toggle("active");
       tag.appendChild(text);
       tag.appendChild(remove);
       tagContainer.appendChild(tag);
@@ -258,7 +225,6 @@ function renderKeywordEditor(keywords) {
 
     wrapper.appendChild(tagContainer);
 
-    // ===== ADD CUSTOM KEYWORD INPUT =====
     const addWrapper = document.createElement("div");
     addWrapper.className = "keyword-add-wrapper";
 
@@ -269,31 +235,29 @@ function renderKeywordEditor(keywords) {
     input.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && input.value.trim()) {
         const newWord = input.value.trim().toLowerCase();
-
         if (!data.custom.includes(newWord)) {
           data.custom.push(newWord);
           window.api.saveKeywords(keywords);
           renderKeywordEditor(keywords);
         }
-
         input.value = "";
       }
     });
 
     addWrapper.appendChild(input);
     wrapper.appendChild(addWrapper);
-
     container.appendChild(wrapper);
   });
 }
+
 // ================= SELECT FOLDER =================
 async function selectFolder() {
   currentFolder = await window.api.chooseFolder();
 
   if (!currentFolder) {
-  showEmptyState();
-  return;
-}
+    showEmptyState();
+    return;
+  }
 
   statusText.innerText = "Analyzing presets...";
   progressFill.style.width = "0%";
@@ -313,12 +277,10 @@ async function selectFolder() {
   }
 
   filteredPreviewData = [...fullPreviewData];
-
-  statusText.innerText =
-    `${fullPreviewData.length} presets detected. Review before sorting.`;
-
+  statusText.innerText = `${fullPreviewData.length} presets detected. Review before sorting.`;
   renderPreview();
 }
+
 function getEnabledCategories() {
   return Array.from(
     document.querySelectorAll(".category-toggle:checked")
@@ -329,18 +291,14 @@ function getEnabledCategories() {
 function applyFilter() {
   const enabled = getEnabledCategories();
 
-  if (!enabled.length) {
-    filteredPreviewData = [];
-  } else {
-    filteredPreviewData = fullPreviewData.filter(item =>
-      enabled.includes(item.category)
-    );
-  }
+  filteredPreviewData = !enabled.length
+    ? []
+    : fullPreviewData.filter(item => enabled.includes(item.category));
 
   renderPreview();
 }
 
-// showundostate
+// ================= UNDO STATE =================
 function showUndoState(restoredCount) {
   previewDiv.innerHTML = "";
 
@@ -372,30 +330,22 @@ function showUndoState(restoredCount) {
   const openBtn = document.createElement("button");
   openBtn.textContent = "Open Restored Folder";
   openBtn.style.marginTop = "16px";
-
-  openBtn.onclick = () => {
-    window.api.openFolder(currentFolder);
-  };
+  openBtn.onclick = () => window.api.openFolder(currentFolder);
 
   const newSessionBtn = document.createElement("button");
   newSessionBtn.textContent = "Start New Session";
   newSessionBtn.style.marginTop = "10px";
-
-  newSessionBtn.onclick = () => {
-    resetSession();
-  };
+  newSessionBtn.onclick = () => resetSession();
 
   wrapper.appendChild(icon);
   wrapper.appendChild(title);
   wrapper.appendChild(subtitle);
   wrapper.appendChild(openBtn);
   wrapper.appendChild(newSessionBtn);
-
   previewDiv.appendChild(wrapper);
 
   statusText.innerText = `Undo restored ${restoredCount} presets.`;
 }
-// showundostate
 
 // ================= PREVIEW =================
 function renderPreview() {
@@ -403,7 +353,6 @@ function renderPreview() {
 
   if (!filteredPreviewData.length) return;
 
-  // ===== Controls =====
   const controls = document.createElement("div");
   controls.style.marginBottom = "12px";
 
@@ -419,7 +368,6 @@ function renderPreview() {
   previewDiv.appendChild(controls);
 
   const grouped = {};
-
   filteredPreviewData.forEach(item => {
     if (!grouped[item.category]) grouped[item.category] = [];
     grouped[item.category].push(item);
@@ -428,7 +376,6 @@ function renderPreview() {
   const folderElements = [];
 
   Object.entries(grouped).forEach(([category, items]) => {
-
     const wrapper = document.createElement("div");
 
     const header = document.createElement("div");
@@ -436,11 +383,9 @@ function renderPreview() {
     header.style.cursor = "pointer";
     header.style.fontWeight = "600";
     header.style.marginTop = "10px";
-
     header.dataset.open = "true";
     header.dataset.labelOpen = `📂 ${category} (${items.length})`;
     header.dataset.labelClosed = `📁 ${category} (${items.length})`;
-
     header.textContent = header.dataset.labelOpen;
 
     const content = document.createElement("div");
@@ -457,20 +402,16 @@ function renderPreview() {
     header.onclick = () => {
       const open = header.dataset.open === "true";
       header.dataset.open = (!open).toString();
-      header.textContent = open
-        ? header.dataset.labelClosed
-        : header.dataset.labelOpen;
+      header.textContent = open ? header.dataset.labelClosed : header.dataset.labelOpen;
       content.style.display = open ? "none" : "block";
     };
 
     wrapper.appendChild(header);
     wrapper.appendChild(content);
     previewDiv.appendChild(wrapper);
-
     folderElements.push({ header, content });
   });
 
-  // Expand All
   expandBtn.onclick = () => {
     folderElements.forEach(({ header, content }) => {
       header.dataset.open = "true";
@@ -479,7 +420,6 @@ function renderPreview() {
     });
   };
 
-  // Collapse All
   collapseBtn.onclick = () => {
     folderElements.forEach(({ header, content }) => {
       header.dataset.open = "false";
@@ -489,8 +429,7 @@ function renderPreview() {
   };
 }
 
-
-
+// ================= START SORT =================
 async function startSort() {
   if (!filteredPreviewData.length || isSorting) return;
 
@@ -502,28 +441,32 @@ async function startSort() {
     progressFill.style.width = val + "%";
   });
 
-const count = await window.api.execute(
-  currentFolder,
-  filteredPreviewData
-);
-
-isSorting = false;
-progressFill.style.width = "100%";
-
-showSortedState(count);
+  // 🔥 FIX: wrap in try/catch so any error (e.g. asar write failure, IPC
+  // rejection) resets isSorting and shows the user an error instead of
+  // leaving the UI permanently stuck on "Sorting..."
+  try {
+    const count = await window.api.execute(currentFolder, filteredPreviewData);
+    isSorting = false;
+    progressFill.style.width = "100%";
+    showSortedState(count);
+  } catch (err) {
+    console.error("Sort failed:", err);
+    isSorting = false;
+    progressFill.style.width = "0%";
+    statusText.innerText = "Sort failed. Please try again.";
+  }
 }
-
-
 
 // ================= UNDO =================
 async function undo() {
   if (isSorting) return;
 
-  const folderBeforeUndo = currentFolder;
+  const result = await window.api.undo();
 
-  const count = await window.api.undo();
+  // sorter returns { count, sourceFolder } — we never rely on currentFolder
+  // being set, so this works correctly even after New Session (currentFolder = null)
+  const { count, sourceFolder } = result;
 
-  // 🔥 UX TIP GOES RIGHT HERE
   if (count === 0) {
     showEmptyState("Nothing to undo.");
     return;
@@ -533,18 +476,18 @@ async function undo() {
   filteredPreviewData = [];
   progressFill.style.width = "0%";
 
-  currentFolder = folderBeforeUndo;
+  // Always restore from the log's own path record, not the in-memory variable
+  currentFolder = sourceFolder;
 
   showUndoState(count);
 }
-// reset session 
+
+// ================= RESET SESSION =================
 function resetSession() {
   currentFolder = null;
   fullPreviewData = [];
   filteredPreviewData = [];
   isSorting = false;
-
   progressFill.style.width = "0%";
-
   showEmptyState("Select a folder to sort.");
 }
