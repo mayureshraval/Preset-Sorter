@@ -175,44 +175,109 @@ async function initUI() {
 
 // ================= RESIZABLE SIDEBAR =================
 document.addEventListener("DOMContentLoaded", () => {
-  const divider = document.getElementById("divider");
-  const sidebar = document.getElementById("sidebar");
-  const main = document.querySelector(".main");
+  const divider  = document.getElementById("divider");
+  const hDivider = document.getElementById("hDivider");
+  const sidebar  = document.getElementById("sidebar");
+  const main     = document.querySelector(".main");
 
   if (!divider || !sidebar || !main) {
     console.error("Resize elements not found");
     return;
   }
 
-  const savedWidth = localStorage.getItem("sidebarWidth");
-  if (savedWidth) sidebar.style.width = savedWidth;
+  // ── Detect narrow (stacked) layout ───────────────────────
+  function isNarrow() {
+    return window.innerWidth <= 900;
+  }
 
-  let isDragging = false;
+  // ── Restore saved widths / heights ───────────────────────
+  if (!isNarrow()) {
+    const savedWidth = localStorage.getItem("sidebarWidth");
+    if (savedWidth) sidebar.style.width = savedWidth;
+  } else {
+    const savedHeight = localStorage.getItem("sidebarHeight");
+    sidebar.style.width = "100%";
+    if (savedHeight) sidebar.style.height = savedHeight;
+  }
+
+  // ── HORIZONTAL drag (wide layout — col-resize) ────────────
+  let isDraggingH = false;
 
   divider.addEventListener("mousedown", (e) => {
+    if (isNarrow()) return;
     e.preventDefault();
-    isDragging = true;
+    isDraggingH = true;
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
   });
 
+  // ── VERTICAL drag (narrow layout — row-resize) ────────────
+  let isDraggingV = false;
+
+  if (hDivider) {
+    hDivider.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      isDraggingV = true;
+      hDivider.classList.add("dragging");
+      document.body.style.cursor = "row-resize";
+      document.body.style.userSelect = "none";
+    });
+  }
+
+  // ── Unified mousemove ─────────────────────────────────────
   document.addEventListener("mousemove", (e) => {
-    if (!isDragging) return;
-    const mainRect = main.getBoundingClientRect();
-    const newWidth = e.clientX - mainRect.left;
-    const minWidth = 220;
-    const maxWidth = mainRect.width - 220;
-    if (newWidth >= minWidth && newWidth <= maxWidth) {
-      sidebar.style.width = newWidth + "px";
+    if (isDraggingH) {
+      const mainRect = main.getBoundingClientRect();
+      const newWidth = e.clientX - mainRect.left;
+      const minWidth = 220;
+      const maxWidth = mainRect.width - 220;
+      if (newWidth >= minWidth && newWidth <= maxWidth) {
+        sidebar.style.width = newWidth + "px";
+      }
+    }
+
+    if (isDraggingV) {
+      const mainRect = main.getBoundingClientRect();
+      const newHeight = e.clientY - mainRect.top;
+      const minHeight = 120;
+      const maxHeight = mainRect.height - 280; // leave room for preview
+      if (newHeight >= minHeight && newHeight <= maxHeight) {
+        sidebar.style.height = newHeight + "px";
+      }
     }
   });
 
+  // ── Unified mouseup ───────────────────────────────────────
   document.addEventListener("mouseup", () => {
-    if (!isDragging) return;
-    isDragging = false;
-    document.body.style.cursor = "default";
-    document.body.style.userSelect = "auto";
-    localStorage.setItem("sidebarWidth", sidebar.style.width);
+    if (isDraggingH) {
+      isDraggingH = false;
+      document.body.style.cursor = "default";
+      document.body.style.userSelect = "auto";
+      localStorage.setItem("sidebarWidth", sidebar.style.width);
+    }
+
+    if (isDraggingV) {
+      isDraggingV = false;
+      if (hDivider) hDivider.classList.remove("dragging");
+      document.body.style.cursor = "default";
+      document.body.style.userSelect = "auto";
+      localStorage.setItem("sidebarHeight", sidebar.style.height);
+    }
+  });
+
+  // ── On window resize: swap between layouts cleanly ────────
+  window.addEventListener("resize", () => {
+    if (!isNarrow()) {
+      // Restore width, clear any height set by vertical drag
+      const w = localStorage.getItem("sidebarWidth");
+      if (w) sidebar.style.width = w;
+      sidebar.style.height = "";
+    } else {
+      // Restore height, clear any width
+      const h = localStorage.getItem("sidebarHeight");
+      sidebar.style.width = "100%";
+      if (h) sidebar.style.height = h;
+    }
   });
 });
 
@@ -511,84 +576,263 @@ function showUndoState(restoredCount) {
 }
 
 // ================= PREVIEW =================
+// Persisted view mode across re-renders
+let currentView = "list"; // "list" | "grid" | "columns"
+
 function renderPreview() {
   clearPreviewInteractivity();
   previewDiv.innerHTML = "";
 
   if (!filteredPreviewData.length) return;
 
-  const controls = document.createElement("div");
-  controls.style.marginBottom = "12px";
-
-  const expandBtn = document.createElement("button");
-  expandBtn.textContent = "Expand All";
-  expandBtn.style.marginRight = "8px";
-
-  const collapseBtn = document.createElement("button");
-  collapseBtn.textContent = "Collapse All";
-
-  controls.appendChild(expandBtn);
-  controls.appendChild(collapseBtn);
-  previewDiv.appendChild(controls);
-
+  // ── Group & sort alphabetically ──────────────────────────
   const grouped = {};
   filteredPreviewData.forEach(item => {
     if (!grouped[item.category]) grouped[item.category] = [];
     grouped[item.category].push(item);
   });
+  const sortedCategories = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
 
-  const folderElements = [];
+  // ── Controls bar ─────────────────────────────────────────
+  const controls = document.createElement("div");
+  controls.className = "view-controls";
 
-  Object.entries(grouped).forEach(([category, items]) => {
-    const wrapper = document.createElement("div");
+  // Left: Expand / Collapse (hidden in columns view)
+  const leftBtns = document.createElement("div");
+  leftBtns.className = "view-controls-left";
 
-    const header = document.createElement("div");
-    header.className = "folder-header";
-    header.style.cursor = "pointer";
-    header.style.fontWeight = "600";
-    header.style.marginTop = "10px";
-    header.dataset.open = "true";
-    header.dataset.labelOpen = `📂 ${category} (${items.length})`;
-    header.dataset.labelClosed = `📁 ${category} (${items.length})`;
-    header.textContent = header.dataset.labelOpen;
+  const expandBtn = document.createElement("button");
+  expandBtn.className = "expand-collapse-btn";
+  expandBtn.textContent = "Expand All";
 
-    const content = document.createElement("div");
-    content.className = "folder-content";
-    content.style.marginLeft = "20px";
+  const collapseBtn = document.createElement("button");
+  collapseBtn.className = "expand-collapse-btn";
+  collapseBtn.textContent = "Collapse All";
 
-    items.forEach(preset => {
-      const row = document.createElement("div");
-      row.className = "preview-row";
-      row.textContent = preset.file;
-      content.appendChild(row);
-    });
+  leftBtns.appendChild(expandBtn);
+  leftBtns.appendChild(collapseBtn);
 
-    header.onclick = () => {
-      const open = header.dataset.open === "true";
-      header.dataset.open = (!open).toString();
-      header.textContent = open ? header.dataset.labelClosed : header.dataset.labelOpen;
-      content.style.display = open ? "none" : "block";
+  // Right: view switcher icons
+  const rightBtns = document.createElement("div");
+  rightBtns.className = "view-controls-right";
+
+  const views = [
+    { id: "list",    icon: "☰", title: "List view" },
+    { id: "grid",    icon: "⊞", title: "Grid view" },
+    { id: "columns", icon: "⫿", title: "Columns view" },
+  ];
+
+  const viewBtnEls = {};
+  views.forEach(v => {
+    const btn = document.createElement("button");
+    btn.className = "view-btn" + (currentView === v.id ? " active" : "");
+    btn.textContent = v.icon;
+    btn.title = v.title;
+    btn.onclick = () => {
+      currentView = v.id;
+      renderPreview();
     };
-
-    wrapper.appendChild(header);
-    wrapper.appendChild(content);
-    previewDiv.appendChild(wrapper);
-    folderElements.push({ header, content });
+    viewBtnEls[v.id] = btn;
+    rightBtns.appendChild(btn);
   });
 
+  controls.appendChild(leftBtns);
+  controls.appendChild(rightBtns);
+  previewDiv.appendChild(controls);
+
+  // In columns view hide expand/collapse (not applicable)
+  if (currentView === "columns") {
+    leftBtns.style.visibility = "hidden";
+  }
+
+  // ── Content container ─────────────────────────────────────
+  const container = document.createElement("div");
+
+  if (currentView === "list") {
+    container.className = "view-list";
+    container.style.cssText = "flex:1; overflow-y:auto;";
+  } else if (currentView === "grid") {
+    container.className = "view-grid";
+    container.style.cssText = "flex:1; overflow-y:auto;";
+  } else {
+    container.className = "view-columns";
+    // columns scrolls horizontally; needs explicit height
+    container.style.cssText = "flex:1; min-height:0;";
+  }
+
+  previewDiv.style.display = "flex";
+  previewDiv.style.flexDirection = "column";
+
+  const folderBlocks = []; // for expand/collapse in list & grid
+
+  sortedCategories.forEach(category => {
+    const items = grouped[category];
+
+    // ── LIST VIEW ────────────────────────────────────────────
+    if (currentView === "list") {
+      const block = document.createElement("div");
+      block.className = "folder-block";
+
+      const headerRow = document.createElement("div");
+      headerRow.className = "folder-header-row";
+
+      const icon = document.createElement("span");
+      icon.className = "folder-icon";
+      icon.textContent = "📂";
+
+      const name = document.createElement("span");
+      name.className = "folder-name";
+      name.textContent = category;
+
+      const count = document.createElement("span");
+      count.className = "folder-count";
+      count.textContent = items.length;
+
+      const chevron = document.createElement("span");
+      chevron.className = "folder-chevron";
+      chevron.textContent = "▼";
+
+      headerRow.appendChild(icon);
+      headerRow.appendChild(name);
+      headerRow.appendChild(count);
+      headerRow.appendChild(chevron);
+
+      const filesDiv = document.createElement("div");
+      filesDiv.className = "folder-files";
+
+      items.forEach(preset => {
+        const row = document.createElement("div");
+        row.className = "file-row";
+        row.textContent = preset.file;
+        filesDiv.appendChild(row);
+      });
+
+      let open = true;
+      headerRow.onclick = () => {
+        open = !open;
+        filesDiv.style.display = open ? "block" : "none";
+        icon.textContent = open ? "📂" : "📁";
+        chevron.style.transform = open ? "rotate(0deg)" : "rotate(-90deg)";
+      };
+
+      block.appendChild(headerRow);
+      block.appendChild(filesDiv);
+      container.appendChild(block);
+      folderBlocks.push({ icon, chevron, filesDiv, getOpen: () => open, setOpen: (v) => { open = v; } });
+
+    // ── GRID VIEW ────────────────────────────────────────────
+    } else if (currentView === "grid") {
+      const block = document.createElement("div");
+      block.className = "folder-block";
+
+      const headerRow = document.createElement("div");
+      headerRow.className = "folder-header-row";
+
+      const icon = document.createElement("span");
+      icon.className = "folder-icon";
+      icon.textContent = "📂";
+
+      const name = document.createElement("span");
+      name.className = "folder-name";
+      name.textContent = category;
+
+      const count = document.createElement("span");
+      count.className = "folder-count";
+      count.textContent = items.length;
+
+      const chevron = document.createElement("span");
+      chevron.className = "folder-chevron";
+      chevron.textContent = "▼";
+
+      headerRow.appendChild(icon);
+      headerRow.appendChild(name);
+      headerRow.appendChild(count);
+      headerRow.appendChild(chevron);
+
+      const filesDiv = document.createElement("div");
+      filesDiv.className = "folder-files";
+
+      items.forEach(preset => {
+        const chip = document.createElement("div");
+        chip.className = "file-chip";
+        // Show name without extension for compactness
+        chip.textContent = preset.file.replace(/\.(fxp|fxb)$/i, "");
+        chip.title = preset.file;
+        filesDiv.appendChild(chip);
+      });
+
+      let open = true;
+      headerRow.onclick = () => {
+        open = !open;
+        filesDiv.style.display = open ? "flex" : "none";
+        icon.textContent = open ? "📂" : "📁";
+        chevron.style.transform = open ? "rotate(0deg)" : "rotate(-90deg)";
+      };
+
+      block.appendChild(headerRow);
+      block.appendChild(filesDiv);
+      container.appendChild(block);
+      folderBlocks.push({ icon, chevron, filesDiv, getOpen: () => open, setOpen: (v) => { open = v; } });
+
+    // ── COLUMNS VIEW ─────────────────────────────────────────
+    } else {
+      const block = document.createElement("div");
+      block.className = "folder-block";
+
+      const headerRow = document.createElement("div");
+      headerRow.className = "folder-header-row";
+
+      const icon = document.createElement("span");
+      icon.className = "folder-icon";
+      icon.textContent = "📂";
+
+      const name = document.createElement("span");
+      name.className = "folder-name";
+      name.textContent = category;
+
+      const count = document.createElement("span");
+      count.className = "folder-count";
+      count.textContent = items.length;
+
+      headerRow.appendChild(icon);
+      headerRow.appendChild(name);
+      headerRow.appendChild(count);
+
+      const filesDiv = document.createElement("div");
+      filesDiv.className = "folder-files";
+
+      items.forEach(preset => {
+        const row = document.createElement("div");
+        row.className = "file-row";
+        row.textContent = preset.file.replace(/\.(fxp|fxb)$/i, "");
+        row.title = preset.file;
+        filesDiv.appendChild(row);
+      });
+
+      block.appendChild(headerRow);
+      block.appendChild(filesDiv);
+      container.appendChild(block);
+    }
+  });
+
+  previewDiv.appendChild(container);
+
+  // ── Expand / Collapse All (list & grid only) ──────────────
   expandBtn.onclick = () => {
-    folderElements.forEach(({ header, content }) => {
-      header.dataset.open = "true";
-      header.textContent = header.dataset.labelOpen;
-      content.style.display = "block";
+    folderBlocks.forEach(({ icon, chevron, filesDiv, setOpen }) => {
+      setOpen(true);
+      filesDiv.style.display = currentView === "grid" ? "flex" : "block";
+      icon.textContent = "📂";
+      chevron.style.transform = "rotate(0deg)";
     });
   };
 
   collapseBtn.onclick = () => {
-    folderElements.forEach(({ header, content }) => {
-      header.dataset.open = "false";
-      header.textContent = header.dataset.labelClosed;
-      content.style.display = "none";
+    folderBlocks.forEach(({ icon, chevron, filesDiv, setOpen }) => {
+      setOpen(false);
+      filesDiv.style.display = "none";
+      icon.textContent = "📁";
+      chevron.style.transform = "rotate(-90deg)";
     });
   };
 }

@@ -107,14 +107,14 @@
 
     .sidebar {
       width: 320px;
-      /* default width */
       min-width: 220px;
       display: flex;
       flex-direction: column;
       gap: 16px;
-      padding-right: 6px;
+      padding-right: 4px;  /* leave room for scrollbar */
       min-height: 0;
-      overflow: hidden;
+      overflow-y: auto;    /* sidebar scrolls when panels overflow */
+      overflow-x: hidden;
     }
 
     /* Make panels stack vertically */
@@ -123,24 +123,32 @@
       flex-direction: column;
     }
 
-    /* Keyword panel wrapper grows */
+    /* Keyword panel wrapper grows to fill remaining sidebar space */
     #keywordPanelWrap {
       flex: 1;
-      min-height: 0;
+      min-height: 180px;   /* always shows at least a bit */
       display: flex;
       flex-direction: column;
     }
 
-    /* Keyword editor takes full remaining space */
-    #keywordEditor {
+    /* panel-content scrolls independently inside keyword panel */
+    /* NOTE: no display rule here — togglePanel sets display:none/block */
+    #keywordPanelWrap .panel-content {
       flex: 1;
       min-height: 0;
       overflow-y: auto;
+      flex-direction: column;
     }
 
-    /* Allow keyword content to scroll internally */
-    #keywordPanelWrap .panel-content {
+    /* Only apply flex layout when the panel is actually open */
+    #keywordPanelWrap.active .panel-content {
+      display: flex;
+    }
+
+    /* Keyword editor fills the scrollable panel-content area */
+    #keywordEditor {
       flex: 1;
+      min-height: 0;
       overflow-y: auto;
     }
 
@@ -381,20 +389,497 @@
       opacity: 0.7;
     }
 
+    /* ================= SCROLLBARS ================= */
+
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #0f0f14;
+      border-radius: 10px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--primary);
+      border-radius: 10px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--accent);
+    }
+
+    ::-webkit-scrollbar-corner {
+      background: #0f0f14;
+    }
+
+    /* ================= DRAG AND DROP ================= */
+
+    .preview-box.drag-over {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(148, 0, 211, 0.35),
+                  inset 0 0 40px rgba(148, 0, 211, 0.08);
+      background: #14101e;
+    }
+
+    .drop-overlay {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      pointer-events: none;
+      gap: 10px;
+    }
+
+    .drop-overlay .drop-icon {
+      font-size: 48px;
+      animation: bounce 1.2s ease-in-out infinite;
+    }
+
+    .drop-overlay .drop-label {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--lavender);
+    }
+
+    .drop-overlay .drop-sub {
+      font-size: 12px;
+      opacity: 0.5;
+    }
+
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0);   opacity: 1; }
+      50%       { transform: translateY(-6px); opacity: 0.75; }
+    }
+
+    
+    /* ================= VIEW SWITCHER ================= */
+
+    .view-controls {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .view-controls-left {
+      display: flex;
+      gap: 6px;
+    }
+
+    .view-controls-right {
+      display: flex;
+      gap: 4px;
+    }
+
+    .view-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: #888;
+      padding: 6px 10px;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      transform: none !important; /* override default button hover transform */
+      line-height: 1;
+    }
+
+    .view-btn:hover {
+      background: rgba(148, 0, 211, 0.15);
+      border-color: var(--primary);
+      color: white;
+      transform: none !important;
+    }
+
+    .view-btn.active {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: white;
+    }
+
+    .expand-collapse-btn {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      color: #ccc;
+      padding: 5px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      transform: none !important;
+    }
+
+    .expand-collapse-btn:hover {
+      background: rgba(148, 0, 211, 0.15);
+      border-color: var(--primary);
+      color: white;
+      transform: none !important;
+    }
+
+    /* ================= LIST VIEW (default) ================= */
+
+    .view-list .folder-block {
+      margin-bottom: 4px;
+    }
+
+    .view-list .folder-header-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 13px;
+      transition: background 0.15s ease;
+      user-select: none;
+    }
+
+    .view-list .folder-header-row:hover {
+      background: rgba(148, 0, 211, 0.12);
+    }
+
+    .view-list .folder-icon { font-size: 15px; }
+
+    .view-list .folder-name { flex: 1; color: var(--lavender); }
+
+    .view-list .folder-count {
+      font-size: 11px;
+      background: rgba(148, 0, 211, 0.25);
+      color: var(--accent);
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-weight: 500;
+    }
+
+    .view-list .folder-chevron {
+      font-size: 10px;
+      color: #666;
+      transition: transform 0.2s ease;
+    }
+
+    .view-list .folder-files {
+      margin-left: 32px;
+      border-left: 2px solid rgba(148, 0, 211, 0.2);
+      padding-left: 12px;
+      margin-bottom: 6px;
+    }
+
+    .view-list .file-row {
+      padding: 4px 6px;
+      font-size: 12px;
+      color: #bbb;
+      border-radius: 4px;
+      transition: background 0.1s;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .view-list .file-row:hover {
+      background: rgba(255,255,255,0.04);
+      color: white;
+    }
+
+    /* ================= GRID VIEW ================= */
+
+    .view-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-content: flex-start;
+    }
+
+    .view-grid .folder-block {
+      background: #1a1a28;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      width: calc(50% - 6px);
+      min-width: 180px;
+      overflow: hidden;
+      transition: border-color 0.2s ease;
+      flex-shrink: 0;
+    }
+
+    .view-grid .folder-block:hover {
+      border-color: rgba(148, 0, 211, 0.5);
+    }
+
+    .view-grid .folder-header-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      cursor: pointer;
+      background: rgba(148, 0, 211, 0.08);
+      border-bottom: 1px solid var(--border);
+      user-select: none;
+      transition: background 0.15s;
+    }
+
+    .view-grid .folder-header-row:hover {
+      background: rgba(148, 0, 211, 0.18);
+    }
+
+    .view-grid .folder-icon { font-size: 14px; }
+
+    .view-grid .folder-name {
+      flex: 1;
+      font-weight: 600;
+      font-size: 12px;
+      color: var(--lavender);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .view-grid .folder-count {
+      font-size: 10px;
+      background: rgba(148, 0, 211, 0.3);
+      color: var(--accent);
+      padding: 2px 7px;
+      border-radius: 10px;
+      font-weight: 600;
+    }
+
+    .view-grid .folder-chevron {
+      font-size: 9px;
+      color: #666;
+      transition: transform 0.2s ease;
+    }
+
+    .view-grid .folder-files {
+      padding: 8px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      max-height: 130px;
+      overflow-y: auto;
+    }
+
+    .view-grid .file-chip {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 6px;
+      padding: 3px 8px;
+      font-size: 11px;
+      color: #bbb;
+      white-space: nowrap;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      transition: background 0.1s;
+    }
+
+    .view-grid .file-chip:hover {
+      background: rgba(148, 0, 211, 0.15);
+      color: white;
+      border-color: rgba(148, 0, 211, 0.3);
+    }
+
+    /* ================= COLUMNS VIEW ================= */
+
+    .view-columns {
+      display: flex;
+      gap: 10px;
+      height: 100%;
+      overflow-x: auto;
+      overflow-y: hidden;
+      align-items: flex-start;
+      padding-bottom: 4px;
+    }
+
+    .view-columns .folder-block {
+      flex-shrink: 0;
+      width: 220px;
+      background: #1a1a28;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      max-height: 100%;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+
+    .view-columns .folder-block:hover {
+      border-color: rgba(148, 0, 211, 0.4);
+    }
+
+    .view-columns .folder-header-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      background: rgba(148, 0, 211, 0.1);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      cursor: default;
+    }
+
+    .view-columns .folder-icon { font-size: 14px; }
+
+    .view-columns .folder-name {
+      flex: 1;
+      font-weight: 600;
+      font-size: 12px;
+      color: var(--lavender);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .view-columns .folder-count {
+      font-size: 10px;
+      background: rgba(148, 0, 211, 0.3);
+      color: var(--accent);
+      padding: 2px 7px;
+      border-radius: 10px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    .view-columns .folder-files {
+      overflow-y: auto;
+      padding: 6px 0;
+      flex: 1;
+    }
+
+    .view-columns .file-row {
+      padding: 5px 12px;
+      font-size: 11px;
+      color: #bbb;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      transition: background 0.1s;
+      cursor: default;
+    }
+
+    .view-columns .file-row:hover {
+      background: rgba(148, 0, 211, 0.12);
+      color: white;
+    }
+
+    /* ================= HORIZONTAL DIVIDER (narrow/stacked mode) ================= */
+
+    .h-divider {
+      display: none; /* only shown in narrow layout */
+      height: 10px;
+      cursor: row-resize;
+      background: transparent;
+      position: relative;
+      z-index: 10;
+      flex-shrink: 0;
+    }
+
+    .h-divider::before {
+      content: "";
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 2px;
+      transition: background 0.2s ease;
+    }
+
+    .h-divider:hover::before,
+    .h-divider.dragging::before {
+      background: var(--primary);
+    }
+
+    /* Grip dots on the horizontal divider */
+    .h-divider::after {
+      content: "· · · · ·";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: rgba(255,255,255,0.25);
+      font-size: 10px;
+      letter-spacing: 3px;
+      pointer-events: none;
+    }
+
     /* ================= RESPONSIVE ================= */
 
     @media (max-width: 900px) {
+
+      /* App container: fixed height, no outer scroll */
+      .app {
+        height: 100vh;
+        overflow: hidden;
+        padding: 14px;
+        gap: 10px;
+      }
+
+      /* Main: vertical column, fills remaining height */
       .main {
         flex-direction: column;
+        overflow: hidden;
+        flex: 1;
+        min-height: 0;
       }
 
-      .divider {
-        display: none;
-      }
+      /* Hide col-resize divider, show row-resize divider */
+      .divider  { display: none; }
+      .h-divider { display: block; flex-shrink: 0; }
 
+      /* ── Sidebar ──
+         Fixed draggable height. overflow-y:auto gives the purple
+         scrollbar so the user can scroll through all panels. */
       .sidebar {
         width: 100% !important;
-        min-width: unset;
+        min-width: unset !important;
+        height: 360px;               /* default, overridden by JS drag */
+        min-height: 120px;
+        max-height: calc(100vh - 220px);
+        overflow-y: auto !important; /* THIS is what shows the scrollbar */
+        overflow-x: hidden;
+        flex-shrink: 0;
+        padding-right: 4px;
+        gap: 10px;
+      }
+
+      /* All panels inside sidebar: natural height, never squished */
+      .sidebar .panel {
+        flex-shrink: 0;
+        min-height: unset;
+        overflow: visible;
+      }
+
+      /* Keyword panel: natural height too — sidebar scroll handles it */
+      #keywordPanelWrap {
+        flex: unset;
+        min-height: unset;
+        flex-shrink: 0;
+      }
+
+      #keywordPanelWrap .panel-content {
+        overflow-y: visible;
+        max-height: unset;
+        min-height: unset;
+      }
+
+      #keywordEditor {
+        overflow-y: visible;
+        min-height: unset;
+      }
+
+      /* Preview panel: fills whatever space is left below sidebar */
+      .content {
+        flex: 1;
+        min-height: 200px;
+        min-width: 0;
+        overflow: hidden;
       }
     }
   </style>
@@ -446,7 +931,7 @@
 
         <div class="panel" id="keywordPanelWrap">
           <div class="panel-header" onclick="togglePanel('keywordPanelWrap')">
-            <span>keywordEditor</span>
+            <span>Keyword Editor</span>
             <span class="arrow">▼</span>
           </div>
           <div class="panel-content">
@@ -457,6 +942,7 @@
       </div>
 
       <div class="divider" id="divider"></div>
+      <div class="h-divider" id="hDivider"></div>
 
       <div class="content">
 
