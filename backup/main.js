@@ -1,7 +1,8 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 const path = require("path");
 const { Worker } = require("worker_threads");
 const sorter = require("./sorter");
+const { Menu, shell } = require("electron");
 
 let mainWindow;
 
@@ -10,7 +11,7 @@ function createWindow() {
     width: 1000,
     height: 700,
     backgroundColor: "#111111",
-    icon: path.join(__dirname, "assets/icon.ico"),
+    icon: path.join(__dirname, "assets/icon.ico"), // 🔥 add this
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true
@@ -23,6 +24,7 @@ app.whenReady().then(() => {
   createWindow();
   createMenu();
 });
+
 
 function createMenu() {
   const template = [
@@ -46,6 +48,7 @@ function createMenu() {
                 contextIsolation: false
               }
             });
+
             aboutWindow.loadFile("about.html");
           }
         },
@@ -53,9 +56,30 @@ function createMenu() {
           label: "Contact Support",
           click: () => {
             const subject = encodeURIComponent("Preset Sorter Pro - Support Request");
+
             const body = encodeURIComponent(
-              `Hello,\n\nPlease describe your issue clearly below:\n\n---------------------------------------\nWhat happened:\n\nWhat were you trying to do:\n\nSteps to reproduce:\n\n---------------------------------------\n\nPlease attach screenshots if possible.\n\nApp Version: ${app.getVersion()}\nOS: ${process.platform}\n\nThank you,\n`
+              `Hello,
+
+Please describe your issue clearly below:
+
+---------------------------------------
+What happened:
+
+What were you trying to do:
+
+Steps to reproduce:
+
+---------------------------------------
+
+Please attach screenshots if possible.
+
+App Version: ${app.getVersion()}
+OS: ${process.platform}
+
+Thank you,
+`
             );
+
             shell.openExternal(
               `mailto:presetsorterpro@outlook.com?subject=${subject}&body=${body}`
             );
@@ -73,53 +97,38 @@ ipcMain.handle("choose-folder", async () => {
   const result = await dialog.showOpenDialog({
     properties: ["openDirectory"]
   });
+
   if (result.canceled) return null;
   return result.filePaths[0];
 });
 
 ipcMain.handle("get-keywords", () => sorter.getKeywords());
-
-// 🔥 FIX: saveKeywords now calls the real sorter function (was crashing before)
 ipcMain.handle("save-keywords", (event, data) => sorter.saveKeywords(data));
 
 ipcMain.handle("open-folder", (event, folderPath) => {
-  if (folderPath) shell.openPath(folderPath);
+  if (folderPath) {
+    shell.openPath(folderPath);
+  }
 });
 
-ipcMain.handle("undo-sort", () => sorter.undoLastMove());
+ipcMain.handle("undo-sort", () => {
+  return sorter.undoLastMove();
+});
 
-// 🔥 FIX: getDefaultKeywords now calls the real sorter function (was crashing before)
-ipcMain.handle("restore-defaults", () => sorter.getDefaultKeywords());
-
+ipcMain.handle("restore-defaults", () => {
+  const defaults = sorter.getDefaultKeywords();
+  sorter.saveKeywords(defaults);
+  return defaults;
+});
 ipcMain.handle("get-version", () => app.getVersion());
-
 ipcMain.handle("preview-sort", async (event, folderPath) => {
   return new Promise((resolve, reject) => {
-    // 🔥 FIX: In a packaged asar build, __dirname points inside the archive.
-    // worker_threads cannot load files from inside an asar. We must use
-    // app.getAppPath() to find the real on-disk location of scan-worker.js,
-    // OR we can inline the work directly in the main process to avoid the
-    // worker path issue entirely. Inlining is the safest cross-platform fix.
-    //
-    // We keep the worker approach but resolve the path correctly:
-    const workerPath = app.isPackaged
-      ? path.join(process.resourcesPath, "app", "scan-worker.js")
-      : path.join(__dirname, "scan-worker.js");
-
-    const worker = new Worker(workerPath, {
+    const worker = new Worker(path.join(__dirname, "scan-worker.js"), {
       workerData: { folder: folderPath }
     });
 
     worker.on("message", resolve);
     worker.on("error", reject);
-
-    // 🔥 FIX: if worker exits without messaging (crash/unhandled error),
-    // reject the promise so the UI doesn't hang forever
-    worker.on("exit", (code) => {
-      if (code !== 0) {
-        reject(new Error(`Scan worker exited with code ${code}`));
-      }
-    });
   });
 });
 
