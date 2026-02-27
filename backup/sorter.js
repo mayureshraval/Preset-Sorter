@@ -21,6 +21,202 @@ const { detectPresetMetadata } = require("./intelligence");
 
 const keywordsPath = path.join(__dirname, "keywords.json");
 
+// ─── Supported Preset File Extensions ────────────────────────────────────────
+// Generic / cross-plugin formats
+//   .fxp  — VST2 single preset (Steinberg)
+//   .fxb  — VST2 preset bank (Steinberg)
+//   .vstpreset — VST3 preset (Steinberg / Cubase)
+// Synth-specific formats
+//   .vital      — Vital (Matt Tytel)
+//   .vitalbank  — Vital bank
+//   .nmsv       — NI Massive (new format)
+//   .ksd        — NI Massive (legacy format)
+//   .nmspresetx — NI Massive X
+//   .spf        — Sylenth1 preset
+//   .sfz        — SFZ sampler format (wide support)
+//   .adg        — Ableton Device Group / Instrument Rack
+//   .adv        — Ableton Device Preset
+//   .aupreset   — Apple AU preset (macOS)
+//   .h2p        — u-he synths (Diva, Hive, Zebra, Repro, etc.)
+//   .hypr       — u-he Hive 2 preset
+//   .omnisphere — Spectrasonics Omnisphere soundbank
+//   .patchwork  — Kilohearts Patchwork
+//   .ksf        — Kontakt / NI sample format
+//   .nki        — Native Instruments Kontakt instrument
+//   .nkc        — NI Kontakt chain
+//   .nkb        — NI Kontakt bank
+//   .nkr        — NI Kontakt resource
+//   .xpf        — Rob Papen preset (Predator, Blade, etc.)
+//   .obxd       — OB-Xd preset
+//   .serum      — Xfer Serum wavetable (not the .fxp preset itself, but some packs use this)
+//   .phase      — Kilohearts Phase Plant preset
+//   .zynaptiqs  — Zynaptiq plugins
+//   .juiceduppreset — JuicedUp / GoodHertz
+//   .als        — Ableton Live Set (project-level, included for completeness)
+const SUPPORTED_EXTENSIONS = new Set([
+  // Universal VST formats
+  ".fxp", ".fxb", ".vstpreset",
+  // Vital
+  ".vital", ".vitalbank",
+  // Native Instruments Massive / Massive X
+  ".nmsv", ".ksd", ".nmspresetx",
+  // Sylenth1
+  ".spf",
+  // u-he (Diva, Hive, Zebra, Repro, Bazille, Presswerk…)
+  ".h2p", ".h2p txt", ".hypr",
+  // Spectrasonics Omnisphere
+  ".omnisphere",
+  // Kilohearts
+  ".patchwork", ".phase",
+  // Native Instruments Kontakt
+  ".nki", ".nkb", ".nkc", ".nkr",
+  // Rob Papen (Predator 2, Blade, etc.)
+  ".xpf",
+  // OB-Xd
+  ".obxd",
+  // Ableton device presets
+  ".adg", ".adv",
+  // Apple AU presets
+  ".aupreset",
+  // SFZ sampler standard
+  ".sfz"
+]);
+
+// ─── FXP/FXB Plugin ID → Synth Name ──────────────────────────────────────────
+// The VST2 FXP/FXB binary header has this layout (all big-endian):
+//   Offset 0  : 4 bytes  — chunkMagic  (always "CcnK")
+//   Offset 4  : 4 bytes  — byteSize
+//   Offset 8  : 4 bytes  — fxMagic     ("FxCk" | "FPCh" | "FxBk" | "FBCh")
+//   Offset 12 : 4 bytes  — version
+//   Offset 16 : 4 bytes  — fxID        ← unique 4-char plugin identifier
+//
+// This map covers the most common synths in the wild.
+// IDs confirmed from hex analysis, KVR registry, and community research.
+const FXP_PLUGIN_ID_MAP = {
+  // Xfer Records
+  "XfsX": "SERUM",
+  "XfT2": "SERUM 2",
+  // Native Instruments
+  "NiMa": "MASSIVE",
+  "NiMX": "MASSIVE X",
+  "NIM1": "MASSIVE",
+  "NiBa": "BATTERY",
+  "NiKo": "KOMPLETE KONTROL",
+  // LennarDigital
+  "syl1": "SYLENTH1",
+  // reFX
+  "Vctr": "NEXUS",
+  "NEXU": "NEXUS",
+  "Vang": "VANGUARD",
+  // Reveal Sound
+  "Spir": "SPIRE",
+  // Rob Papen
+  "Prd2": "PREDATOR 2",
+  "RPBl": "BLADE",
+  "RPGo": "GO2",
+  "RPPr": "PUNCH",
+  // Arturia
+  "AMin": "MINI V",
+  "AJup": "JUPITER-8 V",
+  "APro": "PROPHET V",
+  "ACS8": "CS-80 V",
+  "ASEM": "SEM V",
+  "APig": "PIGMENTS",
+  "APig": "PIGMENTS",
+  // Spectrasonics
+  "OMNI": "OMNISPHERE",
+  "Atmo": "ATMOSPHERE",
+  "Tril": "TRILIAN",
+  "Styl": "STYLUS RMX",
+  // u-he
+  "Diva": "DIVA",
+  "ZoiD": "ZEBRA 2",
+  "Hive": "HIVE",
+  "RePr": "REPRO-1",
+  "ReP5": "REPRO-5",
+  "Bazl": "BAZILLE",
+  "ACpl": "ACE",
+  // Tone2
+  "ICEd": "ICARUS",
+  "Firi": "FIREBIRD",
+  "Elec": "ELECTRA 2",
+  // Vengeance
+  "VP1 ": "AVENGER",
+  "VPS1": "AVENGER",
+  // Output
+  "MVMN": "MOVEMENT",
+  "ANLG": "ANALOG STRINGS",
+  // iZotope
+  "iZtr": "TRASH 2",
+  // Waldorf
+  "WBlo": "BLOFELD",
+  "WA2Q": "QUANTUM",
+  // Camel Audio / Apple
+  "CamA": "ALCHEMY",
+  // TAL
+  "TALn": "TAL-NOISEMAKER",
+  "TALU": "TAL-U-NO-LX",
+  "TALB": "TAL-BASSLINE",
+  "TALR": "TAL-REVERB",
+  // Sonic Charge
+  "scMM": "MICROTONIC",
+  // Other popular synths
+  "DUNE": "DUNE 3",
+  "Dn3 ": "DUNE 3",
+  "Z3TA": "Z3TA+",
+  "z3t2": "Z3TA+ 2",
+  "Seri": "SEKTOR",
+  "BiTC": "BITWIG",
+  "MLTM": "MULTILAYER TM",
+  "OBXd": "OB-XD",
+  "Helm": "HELM",
+};
+
+/**
+ * Reads the 4-char plugin ID from a VST2 .fxp or .fxb file header (offset 16).
+ * Returns a human-readable synth name, or null if unrecognized or not an FXP.
+ */
+async function readFxpPluginId(filePath) {
+  const lower = filePath.toLowerCase();
+  if (!lower.endsWith(".fxp") && !lower.endsWith(".fxb")) return null;
+
+  try {
+    const fd = await fs.open(filePath, "r");
+    const buf = Buffer.alloc(20);
+    await fd.read(buf, 0, 20, 0);
+    await fd.close();
+
+    // Validate magic header "CcnK"
+    if (buf.toString("ascii", 0, 4) !== "CcnK") return null;
+
+    // Plugin ID at offset 16, 4 bytes ASCII
+    const pluginId = buf.toString("ascii", 16, 20).trim();
+    return FXP_PLUGIN_ID_MAP[pluginId] || null;
+  } catch {
+    return null;
+  }
+}
+
+function isSupportedExtension(filename) {
+  const lower = filename.toLowerCase();
+  for (const ext of SUPPORTED_EXTENSIONS) {
+    if (lower.endsWith(ext)) return true;
+  }
+  return false;
+}
+
+function stripPresetExtension(filename) {
+  const lower = filename.toLowerCase();
+  // Sort by length descending so multi-part extensions like ".nmspresetx" match before ".x"
+  const sorted = [...SUPPORTED_EXTENSIONS].sort((a, b) => b.length - a.length);
+  for (const ext of sorted) {
+    if (lower.endsWith(ext)) {
+      return filename.slice(0, filename.length - ext.length);
+    }
+  }
+  return filename;
+}
+
 // Lazy-require electron so this module works correctly when loaded
 // from the main process in a packaged asar build.
 function getLogPath() {
@@ -54,8 +250,8 @@ async function getDefaultKeywords() {
 }
 
 function getBestCategory(filename, keywords) {
-  // Strip extension
-  const nameRaw = filename.toLowerCase().replace(/\.(fxp|fxb)$/i, "");
+  // Strip extension (supports all known preset formats)
+  const nameRaw = stripPresetExtension(filename).toLowerCase();
 
   // Normalized version: underscores/dashes/dots → spaces, for general matching
   const name = nameRaw.replace(/[_\-\.]+/g, " ").trim();
@@ -166,18 +362,17 @@ async function previewSort(sourceDir) {
       if (stat.isDirectory()) {
         if (categoryNames.includes(file)) continue;
         await scan(fullPath);
-      } else if (
-        file.toLowerCase().endsWith(".fxp") ||
-        file.toLowerCase().endsWith(".fxb")
-      ) {
+      } else if (isSupportedExtension(file)) {
         const category = getBestCategory(file, keywords);
         const intelligence = detectPresetMetadata(file);
+        const pluginName = await readFxpPluginId(fullPath);
 
         results.push({
           from: fullPath,
           file,
           category,
-          intelligence
+          intelligence,
+          pluginName   // e.g. "SERUM", "MASSIVE", or null for non-FXP formats
         });
       }
     }
@@ -264,5 +459,6 @@ module.exports = {
   undoLastMove,
   getKeywords,
   saveKeywords,
-  getDefaultKeywords
+  getDefaultKeywords,
+  getSupportedExtensions: () => [...SUPPORTED_EXTENSIONS]
 };

@@ -17,6 +17,7 @@
 const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require("electron");
 const path = require("path");
 const sorter = require("./sorter");
+const sampleSorter = require("./sample-sorter");
 
 let mainWindow;
 
@@ -114,7 +115,10 @@ ipcMain.handle("get-version", () => app.getVersion());
 // Running previewSort directly in the main process is perfectly safe —
 // IPC calls are already async so the renderer UI stays responsive.
 ipcMain.handle("preview-sort", async (event, folderPath) => {
-  return sorter.previewSort(folderPath);
+  return sorter.previewSort(
+    folderPath,
+    (progress) => mainWindow.webContents.send("analyze-progress", progress)
+  );
 });
 
 ipcMain.handle("execute-sort", (event, folderPath, previewData) => {
@@ -122,5 +126,28 @@ ipcMain.handle("execute-sort", (event, folderPath, previewData) => {
     folderPath,
     previewData,
     (progress) => mainWindow.webContents.send("sort-progress", progress)
+  );
+});
+
+// ─── Sample Sorter IPC handlers ───────────────────────────────────────────────
+ipcMain.handle("get-sample-keywords",     () => sampleSorter.getSampleKeywords());
+ipcMain.handle("save-sample-keywords",    (_, data) => sampleSorter.saveSampleKeywords(data));
+ipcMain.handle("restore-sample-defaults", () => sampleSorter.getDefaultSampleKeywords());
+ipcMain.handle("undo-sample-sort",        () => sampleSorter.undoLastSampleMove());
+
+ipcMain.handle("preview-sample-sort", async (_, folderPath, intelligenceMode) => {
+  return sampleSorter.previewSampleSort(
+    folderPath,
+    intelligenceMode || false,
+    (progress) => mainWindow.webContents.send("analyze-progress", progress)
+  );
+});
+
+ipcMain.handle("execute-sample-sort", (_, folderPath, previewData, keyFilter) => {
+  return sampleSorter.executeSampleSort(
+    folderPath,
+    previewData,
+    (progress) => mainWindow.webContents.send("sort-progress", progress),
+    keyFilter || null
   );
 });

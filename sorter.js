@@ -336,10 +336,31 @@ async function resolveDuplicate(destPath) {
   }
 }
 
-async function previewSort(sourceDir) {
+async function previewSort(sourceDir, progressCallback = null) {
   const keywords = await getKeywords();
   const results = [];
   const categoryNames = Object.keys(keywords).filter(k => k !== "_meta");
+
+  // ── Pass 1: fast count of all preset files (no metadata reads) ──────────────
+  let totalFiles = 0;
+  async function countFiles(dir) {
+    let files;
+    try { files = await fs.readdir(dir); } catch { return; }
+    for (const file of files) {
+      const fullPath = path.join(dir, file);
+      let stat;
+      try { stat = await fs.stat(fullPath); } catch { continue; }
+      if (stat.isDirectory()) {
+        if (!categoryNames.includes(file)) await countFiles(fullPath);
+      } else if (isSupportedExtension(file)) {
+        totalFiles++;
+      }
+    }
+  }
+  await countFiles(sourceDir);
+
+  // ── Pass 2: analyse files and emit progress after each one ──────────────────
+  let processed = 0;
 
   async function scan(dir) {
     let files;
@@ -372,8 +393,13 @@ async function previewSort(sourceDir) {
           file,
           category,
           intelligence,
-          pluginName   // e.g. "SERUM", "MASSIVE", or null for non-FXP formats
+          pluginName
         });
+
+        processed++;
+        if (progressCallback && totalFiles > 0) {
+          progressCallback(Math.floor((processed / totalFiles) * 100));
+        }
       }
     }
   }

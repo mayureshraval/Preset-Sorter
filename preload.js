@@ -49,6 +49,19 @@ getVersion: () => ipcRenderer.invoke("get-version"),
   onProgress: (callback) => {
     ipcRenderer.removeAllListeners("sort-progress");
     ipcRenderer.on("sort-progress", (_, value) => callback(value));
-  }
+  },
+
+  onAnalyzeProgress: (callback) => {
+    ipcRenderer.removeAllListeners("analyze-progress");
+    ipcRenderer.on("analyze-progress", (_, value) => callback(value));
+  },
+
+  // ─── Sample Sorter API ──────────────────────────────────────────────────────
+  samplePreview:         (path, intelligenceMode) => ipcRenderer.invoke("preview-sample-sort", path, intelligenceMode),
+  sampleExecute:         (path, data, keyFilter) => ipcRenderer.invoke("execute-sample-sort", path, data, keyFilter),
+  sampleUndo:            () => ipcRenderer.invoke("undo-sample-sort"),
+  getSampleKeywords:     () => ipcRenderer.invoke("get-sample-keywords"),
+  saveSampleKeywords:    (data) => ipcRenderer.invoke("save-sample-keywords", data),
+  restoreSampleDefaults: () => ipcRenderer.invoke("restore-sample-defaults")
 
 });

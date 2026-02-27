@@ -20,6 +20,185 @@ let filteredPreviewData = [];
 let intelligenceMode = false;
 let isSorting = false;
 
+// ================= APP MODE =================
+// "preset" | "sample"
+let appMode = "preset";
+let sampleIntelligenceMode = false;
+// keyFilter drives both the preview filter AND the sort folder naming
+// Shape: { mode: "all"|"major"|"minor"|"notes", notes: Set<string> }
+let keyFilter = { mode: "all", notes: new Set() };
+
+function switchMode(mode) {
+  if (mode === appMode) return;
+  appMode = mode;
+
+  // Update tab buttons
+  document.getElementById("tabPreset").classList.toggle("active", mode === "preset");
+  document.getElementById("tabSample").classList.toggle("active", mode === "sample");
+
+  // Show/hide sidebar panels
+  document.querySelectorAll(".preset-only").forEach(el => el.classList.toggle("hidden-panel", mode !== "preset"));
+  document.querySelectorAll(".sample-only").forEach(el => el.classList.toggle("hidden-panel", mode !== "sample"));
+
+  // Reset session state when switching modes
+  resetSession();
+}
+
+// ================= SAMPLE INTELLIGENCE TOGGLE =================
+function onSampleIntelligenceToggle() {
+  sampleIntelligenceMode = document.getElementById("sampleIntelligenceToggle").checked;
+  // Re-run preview if we have a folder loaded
+  if (currentFolder && appMode === "sample") {
+    runPreview(currentFolder);
+  }
+}
+
+// ================= KEY FILTER BAR =================
+function renderKeyFilterBar() {
+  const bar = document.getElementById("keyFilterBar");
+  if (!bar) return;
+
+  const hasKeyData = fullPreviewData.some(p => p.metadata?.key || p.metadata?.mood);
+  if (appMode !== "sample" || !hasKeyData) {
+    bar.style.display = "none";
+    return;
+  }
+
+  bar.style.display = "flex";
+  bar.innerHTML = "";
+
+  // ── Mode buttons: All / Major / Minor ────────────────────────────────────
+  const modeLabel = document.createElement("span");
+  modeLabel.className = "key-filter-label";
+  modeLabel.textContent = "Filter:";
+  bar.appendChild(modeLabel);
+
+  const modes = [
+    { id: "all",   label: "All Keys" },
+    { id: "major", label: "Major" },
+    { id: "minor", label: "Minor" },
+  ];
+
+  modes.forEach(m => {
+    const btn = document.createElement("button");
+    btn.className = `key-filter-btn ${m.id} ${keyFilter.mode === m.id ? "active" : ""}`;
+    btn.textContent = m.label;
+    btn.title = m.id === "all"
+      ? "Sort normally — no key suffix in folder names"
+      : `Filter to ${m.label} keys — folders will be named "Category [${m.id === "major" ? "Major" : "Minor"}]"`;
+    btn.onclick = () => {
+      if (keyFilter.mode === m.id && m.id !== "all") {
+        // Click active mode button → back to all
+        keyFilter = { mode: "all", notes: new Set() };
+      } else {
+        keyFilter = { mode: m.id, notes: new Set() };
+      }
+      applyFilter();
+      renderKeyFilterBar();
+      updateSortFolderHint();
+    };
+    bar.appendChild(btn);
+  });
+
+  // ── Separator ─────────────────────────────────────────────────────────────
+  const sep = document.createElement("div");
+  sep.className = "key-filter-sep";
+  bar.appendChild(sep);
+
+  // ── Individual note buttons (multi-select) ────────────────────────────────
+  const noteLabel = document.createElement("span");
+  noteLabel.className = "key-filter-label";
+  noteLabel.textContent = "Notes:";
+  bar.appendChild(noteLabel);
+
+  // Collect all unique keys from data, sort them
+  const allKeys = [...new Set(
+    fullPreviewData
+      .map(p => p.metadata?.key)
+      .filter(Boolean)
+      .map(k => {
+        // Normalise capitalisation: "am" → "Am", "c#m" → "C#m"
+        k = k.trim();
+        return k[0].toUpperCase() + k.slice(1).toLowerCase();
+      })
+  )].sort((a, b) => {
+    // Sort: naturals first, then sharps, then flats; major before minor
+    const noteOrder = ["C","D","E","F","G","A","B"];
+    const baseA = a.replace(/[#bm]/g, "")[0] || a[0];
+    const baseB = b.replace(/[#bm]/g, "")[0] || b[0];
+    return noteOrder.indexOf(baseA) - noteOrder.indexOf(baseB);
+  });
+
+  if (allKeys.length === 0) {
+    const noKeys = document.createElement("span");
+    noKeys.style.cssText = "font-size:11px; color:#555; font-style:italic;";
+    noKeys.textContent = "No key data — enable Intelligence Mode";
+    bar.appendChild(noKeys);
+    return;
+  }
+
+  allKeys.forEach(k => {
+    const isActive = keyFilter.notes.has(k);
+    const btn = document.createElement("button");
+    btn.className = `key-filter-btn ${isActive ? "active" : ""}`;
+    btn.textContent = k;
+
+    // Show what folder name will look like on hover
+    const noteSet = new Set(keyFilter.notes);
+    if (!isActive) noteSet.add(k); else noteSet.delete(k);
+    const previewNotes = [...noteSet].join(", ");
+    btn.title = noteSet.size === 0
+      ? "Click to filter by this key"
+      : `Folders will be named: "Category [${previewNotes}]"`;
+
+    btn.onclick = () => {
+      // Switch to notes mode if not already
+      if (keyFilter.mode !== "notes") {
+        keyFilter = { mode: "notes", notes: new Set() };
+      }
+      // Toggle this note
+      if (keyFilter.notes.has(k)) {
+        keyFilter.notes.delete(k);
+        // If no notes left, fall back to "all"
+        if (keyFilter.notes.size === 0) keyFilter.mode = "all";
+      } else {
+        keyFilter.notes.add(k);
+      }
+      applyFilter();
+      renderKeyFilterBar();
+      updateSortFolderHint();
+    };
+
+    bar.appendChild(btn);
+  });
+
+  // ── Folder name preview hint ───────────────────────────────────────────────
+  const hintEl = document.getElementById("sortFolderHint");
+  if (hintEl) updateSortFolderHintEl(hintEl);
+}
+
+// Shows a small hint text near the status bar describing the active key filter
+function updateSortFolderHint() {
+  const hintEl = document.getElementById("sortFolderHint");
+  if (!hintEl) return;
+  updateSortFolderHintEl(hintEl);
+}
+
+function updateSortFolderHintEl(el) {
+  if (appMode !== "sample" || keyFilter.mode === "all") {
+    el.textContent = "";
+    return;
+  }
+  let desc = "";
+  if (keyFilter.mode === "major") desc = "Sorting into: Category [Major]";
+  else if (keyFilter.mode === "minor") desc = "Sorting into: Category [Minor]";
+  else if (keyFilter.mode === "notes" && keyFilter.notes.size > 0) {
+    const labels = [...keyFilter.notes].join(", ");
+    desc = `Sorting into: Category [${labels}]`;
+  }
+  el.textContent = desc;
+}
+
 // ================= SYNTH TAG MAPPING =================
 // For .fxp/.fxb files the tag comes from the binary plugin ID read in sorter.js
 // (e.g. "SERUM", "MASSIVE", "SYLENTH1"). This map is used as a fallback for
@@ -334,6 +513,11 @@ async function initUI() {
   const keywords = await window.api.getKeywords();
   renderCategoryToggles(keywords);
   renderKeywordEditor(keywords);
+
+  const sampleKeywords = await window.api.getSampleKeywords();
+  renderSampleCategoryToggles(sampleKeywords);
+  renderSampleKeywordEditor(sampleKeywords);
+
   showEmptyState();
 }
 
@@ -499,26 +683,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     currentFolder = droppedPath;
-    statusText.innerText = "Analyzing presets...";
+    statusText.innerText = "Analyzing...";
     progressFill.style.width = "0%";
     previewBox.innerHTML = "";
 
-    try {
-      fullPreviewData = await window.api.preview(currentFolder);
-    } catch (err) {
-      console.error(err);
-      statusText.innerText = "Error analyzing folder.";
-      return;
-    }
-
-    if (!fullPreviewData.length) {
-      statusText.innerText = "No presets found in dropped folder.";
-      return;
-    }
-
-    filteredPreviewData = [...fullPreviewData];
-    statusText.innerText = `${fullPreviewData.length} presets detected. Review before sorting.`;
-    renderPreview();
+    await runPreview(currentFolder);
   });
 
   function showDropOverlay() {
@@ -644,38 +813,56 @@ function renderKeywordEditor(keywords) {
 // ================= SELECT FOLDER =================
 async function selectFolder() {
   currentFolder = await window.api.chooseFolder();
+  if (!currentFolder) { showEmptyState(); return; }
+  await runPreview(currentFolder);
+}
 
-  if (!currentFolder) {
-    showEmptyState();
-    return;
-  }
-
-  statusText.innerText = "Analyzing presets...";
+async function runPreview(folder) {
+  statusText.innerText = appMode === "sample" ? "Analyzing samples..." : "Analyzing presets...";
   progressFill.style.width = "0%";
   previewDiv.innerHTML = "";
 
+  // Wire analyze progress bar for both modes
+  const modeLabel = appMode === "sample" ? "samples" : "presets";
+  window.api.onAnalyzeProgress(val => {
+    progressFill.style.width = val + "%";
+    statusText.innerText = `Analyzing ${modeLabel}... ${val}%`;
+  });
+
   try {
-    fullPreviewData = await window.api.preview(currentFolder);
+    if (appMode === "sample") {
+      fullPreviewData = await window.api.samplePreview(folder, sampleIntelligenceMode);
+    } else {
+      fullPreviewData = await window.api.preview(folder);
+    }
   } catch (err) {
     console.error(err);
+    progressFill.style.width = "0%";
     statusText.innerText = "Error analyzing folder.";
     return;
   }
 
+  // Analysis complete — snap bar to 100% briefly then clear it
+  progressFill.style.width = "100%";
+  setTimeout(() => { progressFill.style.width = "0%"; }, 600);
+
   if (!fullPreviewData.length) {
-    statusText.innerText = "No presets found.";
+    statusText.innerText = appMode === "sample" ? "No samples found." : "No presets found.";
     return;
   }
 
   filteredPreviewData = [...fullPreviewData];
-  statusText.innerText = `${fullPreviewData.length} presets detected. Review before sorting.`;
+  statusText.innerText = `${fullPreviewData.length} ${appMode === "sample" ? "samples" : "presets"} detected. Review before sorting.`;
+  keyFilter = { mode: "all", notes: new Set() };
+  renderKeyFilterBar();
   renderPreview();
 }
 
 function getEnabledCategories() {
-  return Array.from(
-    document.querySelectorAll(".category-toggle:checked")
-  ).map(cb => cb.value);
+  const selector = appMode === "sample"
+    ? ".sample-category-toggle:checked"
+    : ".category-toggle:checked";
+  return Array.from(document.querySelectorAll(selector)).map(cb => cb.value);
 }
 
 // ================= FILTER =================
@@ -684,7 +871,40 @@ function applyFilter() {
 
   filteredPreviewData = !enabled.length
     ? []
-    : fullPreviewData.filter(item => enabled.includes(item.category));
+    : fullPreviewData.filter(item => {
+        if (!enabled.includes(item.category)) return false;
+
+        // Key filter (sample mode only, skip if mode is "all")
+        if (appMode === "sample" && keyFilter.mode !== "all") {
+          const rawKey  = (item.metadata?.key || "").trim();
+          const mood    = item.metadata?.mood || "";
+          // Normalise: "am" → "Am"
+          const normKey = rawKey ? rawKey[0].toUpperCase() + rawKey.slice(1).toLowerCase() : "";
+          const isMinor = normKey.endsWith("m") || mood === "Minor";
+          const isMajor = !isMinor && (mood === "Major" || normKey.length > 0);
+
+          if (keyFilter.mode === "major") {
+            if (isMinor) return false;
+            if (!normKey && mood !== "Major") return false;
+
+          } else if (keyFilter.mode === "minor") {
+            if (!isMinor) return false;
+
+          } else if (keyFilter.mode === "notes") {
+            // Multi-select: item must match at least one of the selected notes
+            if (keyFilter.notes.size === 0) return true;
+            if (!normKey) return false;
+            let matched = false;
+            for (const n of keyFilter.notes) {
+              const normN = n[0].toUpperCase() + n.slice(1).toLowerCase();
+              if (normKey === normN) { matched = true; break; }
+            }
+            if (!matched) return false;
+          }
+        }
+
+        return true;
+      });
 
   renderPreview();
 }
@@ -742,6 +962,65 @@ function showUndoState(restoredCount) {
 // ================= PREVIEW =================
 // Persisted view mode across re-renders
 let currentView = "list"; // "list" | "grid" | "columns"
+
+
+// ── Build sample metadata tags row (shared across all 3 view modes) ─────────
+function buildSampleTagsWrap(preset) {
+  const wrap = document.createElement("span");
+  wrap.style.cssText = "display:inline-flex; align-items:center; gap:3px; flex-shrink:0;";
+
+  // Extension badge
+  const extBadge = document.createElement("span");
+  extBadge.className = "ext-badge";
+  extBadge.textContent = (preset.ext || "").replace(".", "").toUpperCase();
+  wrap.appendChild(extBadge);
+
+  // BPM chip
+  if (preset.metadata?.bpm) {
+    const c = document.createElement("span");
+    c.className = "meta-chip";
+    c.textContent = Math.round(preset.metadata.bpm) + " BPM";
+    wrap.appendChild(c);
+  }
+
+  // Key chip
+  if (preset.metadata?.key) {
+    const c = document.createElement("span");
+    c.className = "meta-chip";
+    c.textContent = preset.metadata.key.toUpperCase();
+    wrap.appendChild(c);
+  }
+
+  // Mood chip (when no key but mood exists)
+  if (!preset.metadata?.key && preset.metadata?.mood) {
+    const c = document.createElement("span");
+    c.className = "meta-chip";
+    c.textContent = preset.metadata.mood;
+    wrap.appendChild(c);
+  }
+
+  // One-shot / Loop badge
+  if (preset.sampleType && preset.sampleType !== "unknown") {
+    const b = document.createElement("span");
+    b.className = `sample-type-badge ${preset.sampleType}`;
+    b.textContent = preset.sampleType === "one-shot" ? "ONE SHOT" : "LOOP";
+    wrap.appendChild(b);
+  }
+
+  return wrap;
+}
+
+
+// Returns the folder display name with key suffix when a key filter is active
+function getDisplayFolderName(category) {
+  if (appMode !== "sample" || keyFilter.mode === "all") return category;
+  if (keyFilter.mode === "major")  return `${category} [Major]`;
+  if (keyFilter.mode === "minor")  return `${category} [Minor]`;
+  if (keyFilter.mode === "notes" && keyFilter.notes.size > 0) {
+    return `${category} [${[...keyFilter.notes].join(", ")}]`;
+  }
+  return category;
+}
 
 function renderPreview() {
   clearPreviewInteractivity();
@@ -846,7 +1125,7 @@ function renderPreview() {
 
       const name = document.createElement("span");
       name.className = "folder-name";
-      name.textContent = category;
+      name.textContent = getDisplayFolderName(category);
 
       const count = document.createElement("span");
       count.className = "folder-count";
@@ -867,16 +1146,22 @@ function renderPreview() {
       items.forEach(preset => {
         const row = document.createElement("div");
         row.className = "file-row";
-        row.style.cssText = "display:flex; align-items:center; justify-content:space-between;";
+        row.style.cssText = "display:flex; align-items:center; justify-content:space-between; gap:4px;";
 
         const nameSpan = document.createElement("span");
-        nameSpan.textContent = preset.file;
+        nameSpan.textContent = appMode === "sample" ? stripDisplayExtension(preset.file) : preset.file;
         nameSpan.style.cssText = "flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
         row.appendChild(nameSpan);
 
-        const tagEl = createSynthTagEl(preset);
-        if (tagEl) row.appendChild(tagEl);
-
+        if (appMode === "sample") {
+          const tagsWrap = buildSampleTagsWrap(preset);
+          row.appendChild(tagsWrap);
+        } else {
+          const tagsWrap = document.createElement("span");
+          tagsWrap.style.cssText = "display:inline-flex; align-items:center; gap:3px; flex-shrink:0;";
+          const tagEl = createSynthTagEl(preset);
+          if (tagEl) { tagsWrap.appendChild(tagEl); row.appendChild(tagsWrap); }
+        }
         filesDiv.appendChild(row);
       });
 
@@ -907,7 +1192,7 @@ function renderPreview() {
 
       const name = document.createElement("span");
       name.className = "folder-name";
-      name.textContent = category;
+      name.textContent = getDisplayFolderName(category);
 
       const count = document.createElement("span");
       count.className = "folder-count";
@@ -929,16 +1214,20 @@ function renderPreview() {
         const chip = document.createElement("div");
         chip.className = "file-chip";
         chip.title = preset.file;
-        chip.style.cssText = "display:flex; flex-direction:column; align-items:flex-start; gap:4px;";
+        chip.style.cssText = "display:flex; flex-direction:column; align-items:flex-start; gap:5px;";
 
         const nameSpan = document.createElement("span");
-        nameSpan.textContent = stripDisplayExtension(preset.file);
+        nameSpan.textContent = appMode === "sample" ? stripDisplayExtension(preset.file) : stripDisplayExtension(preset.file);
+        nameSpan.style.cssText = "overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:100%;";
         chip.appendChild(nameSpan);
 
-        const tagEl = createSynthTagEl(preset);
-        if (tagEl) {
-          tagEl.style.marginLeft = "0";
-          chip.appendChild(tagEl);
+        if (appMode === "sample") {
+          const tagsWrap = buildSampleTagsWrap(preset);
+          tagsWrap.style.cssText = "display:flex; flex-wrap:wrap; gap:3px; align-items:center;";
+          chip.appendChild(tagsWrap);
+        } else {
+          const tagEl = createSynthTagEl(preset);
+          if (tagEl) { tagEl.style.marginLeft = "0"; chip.appendChild(tagEl); }
         }
 
         filesDiv.appendChild(chip);
@@ -971,7 +1260,7 @@ function renderPreview() {
 
       const name = document.createElement("span");
       name.className = "folder-name";
-      name.textContent = category;
+      name.textContent = getDisplayFolderName(category);
 
       const count = document.createElement("span");
       count.className = "folder-count";
@@ -988,15 +1277,28 @@ function renderPreview() {
         const row = document.createElement("div");
         row.className = "file-row";
         row.title = preset.file;
-        row.style.cssText = "display:flex; align-items:center; justify-content:space-between; gap:6px;";
 
-        const nameSpan = document.createElement("span");
-        nameSpan.textContent = stripDisplayExtension(preset.file);
-        nameSpan.style.cssText = "flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
-        row.appendChild(nameSpan);
+        if (appMode === "sample") {
+          // Sample mode: name on top, tags row below
+          row.style.cssText = "display:flex; flex-direction:column; gap:3px; padding:5px 12px;";
 
-        const tagEl = createSynthTagEl(preset);
-        if (tagEl) row.appendChild(tagEl);
+          const nameSpan = document.createElement("span");
+          nameSpan.textContent = stripDisplayExtension(preset.file);
+          nameSpan.style.cssText = "overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; color:#bbb;";
+          row.appendChild(nameSpan);
+
+          const tagsWrap = buildSampleTagsWrap(preset);
+          tagsWrap.style.cssText = "display:flex; flex-wrap:wrap; gap:3px;";
+          row.appendChild(tagsWrap);
+        } else {
+          row.style.cssText = "display:flex; align-items:center; justify-content:space-between; gap:6px;";
+          const nameSpan = document.createElement("span");
+          nameSpan.textContent = stripDisplayExtension(preset.file);
+          nameSpan.style.cssText = "flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
+          row.appendChild(nameSpan);
+          const tagEl = createSynthTagEl(preset);
+          if (tagEl) row.appendChild(tagEl);
+        }
 
         filesDiv.appendChild(row);
       });
@@ -1027,6 +1329,9 @@ function renderPreview() {
       chevron.style.transform = "rotate(-90deg)";
     });
   };
+
+  // Keep the hint in sync every time preview re-renders
+  updateSortFolderHint();
 }
 
 // ================= START SORT =================
@@ -1037,15 +1342,18 @@ async function startSort() {
   statusText.innerText = "Sorting...";
   progressFill.style.width = "0%";
 
-  window.api.onProgress(val => {
-    progressFill.style.width = val + "%";
-  });
+  window.api.onProgress(val => { progressFill.style.width = val + "%"; });
 
-  // 🔥 FIX: wrap in try/catch so any error (e.g. asar write failure, IPC
-  // rejection) resets isSorting and shows the user an error instead of
-  // leaving the UI permanently stuck on "Sorting..."
   try {
-    const count = await window.api.execute(currentFolder, filteredPreviewData);
+    let count;
+    if (appMode === "sample") {
+      count = await window.api.sampleExecute(currentFolder, filteredPreviewData, {
+        mode: keyFilter.mode,
+        notes: [...keyFilter.notes]
+      });
+    } else {
+      count = await window.api.execute(currentFolder, filteredPreviewData);
+    }
     isSorting = false;
     progressFill.style.width = "100%";
     showSortedState(count);
@@ -1061,24 +1369,18 @@ async function startSort() {
 async function undo() {
   if (isSorting) return;
 
-  const result = await window.api.undo();
+  const result = appMode === "sample"
+    ? await window.api.sampleUndo()
+    : await window.api.undo();
 
-  // sorter returns { count, sourceFolder } — we never rely on currentFolder
-  // being set, so this works correctly even after New Session (currentFolder = null)
   const { count, sourceFolder } = result;
 
-  if (count === 0) {
-    showEmptyState("Nothing to undo.");
-    return;
-  }
+  if (count === 0) { showEmptyState("Nothing to undo."); return; }
 
-  fullPreviewData = [];
+  fullPreviewData    = [];
   filteredPreviewData = [];
   progressFill.style.width = "0%";
-
-  // Always restore from the log's own path record, not the in-memory variable
   currentFolder = sourceFolder;
-
   showUndoState(count);
 }
 
@@ -1088,6 +1390,115 @@ function resetSession() {
   fullPreviewData = [];
   filteredPreviewData = [];
   isSorting = false;
+  keyFilter = { mode: "all", notes: new Set() };
   progressFill.style.width = "0%";
+  const bar = document.getElementById("keyFilterBar");
+  if (bar) bar.style.display = "none";
   showEmptyState("Select a folder to sort.");
+}
+
+// =============================================================================
+// ================= SAMPLE SORTER UI ==========================================
+// =============================================================================
+
+// ── Sample Category Toggles ───────────────────────────────────────────────────
+function renderSampleCategoryToggles(keywords) {
+  const panel = document.getElementById("sampleCategoryPanel");
+  panel.innerHTML = "";
+
+  Object.entries(keywords).forEach(([cat]) => {
+    if (cat === "_meta") return;
+    const label = document.createElement("label");
+    label.innerHTML = `
+      <input type="checkbox" class="sample-category-toggle" value="${cat}" checked>
+      ${cat}
+    `;
+    panel.appendChild(label);
+  });
+
+  document.querySelectorAll(".sample-category-toggle")
+    .forEach(cb => cb.addEventListener("change", applyFilter));
+}
+
+// ── Sample Keyword Editor ─────────────────────────────────────────────────────
+function renderSampleKeywordEditor(keywords) {
+  const container = document.getElementById("sampleKeywordEditor");
+  container.innerHTML = "";
+
+  Object.entries(keywords).forEach(([category, data]) => {
+    if (category === "_meta") return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "keyword-category";
+
+    const title = document.createElement("h4");
+    title.innerText = category;
+    wrapper.appendChild(title);
+
+    const tagContainer = document.createElement("div");
+    tagContainer.className = "keyword-tag-container";
+
+    data.default.forEach(word => {
+      const tag = document.createElement("div");
+      tag.className = "keyword-tag default active";
+      tag.innerText = word;
+      tag.onclick = () => tag.classList.toggle("active");
+      tagContainer.appendChild(tag);
+    });
+
+    data.custom.forEach(word => {
+      const tag = document.createElement("div");
+      tag.className = "keyword-tag custom active";
+
+      const text = document.createElement("span");
+      text.innerText = word;
+
+      const remove = document.createElement("span");
+      remove.innerText = "✕";
+      remove.className = "remove-btn";
+      remove.onclick = (e) => {
+        e.stopPropagation();
+        data.custom = data.custom.filter(w => w !== word);
+        window.api.saveSampleKeywords(keywords);
+        renderSampleKeywordEditor(keywords);
+      };
+
+      tag.onclick = () => tag.classList.toggle("active");
+      tag.appendChild(text);
+      tag.appendChild(remove);
+      tagContainer.appendChild(tag);
+    });
+
+    wrapper.appendChild(tagContainer);
+
+    const addWrapper = document.createElement("div");
+    addWrapper.className = "keyword-add-wrapper";
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.placeholder = "Add custom keyword...";
+
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && input.value.trim()) {
+        const newWord = input.value.trim().toLowerCase();
+        if (!data.custom.includes(newWord)) {
+          data.custom.push(newWord);
+          window.api.saveSampleKeywords(keywords);
+          renderSampleKeywordEditor(keywords);
+        }
+        input.value = "";
+      }
+    });
+
+    addWrapper.appendChild(input);
+    wrapper.appendChild(addWrapper);
+    container.appendChild(wrapper);
+  });
+}
+
+// ── Restore Sample Defaults ───────────────────────────────────────────────────
+async function restoreSampleDefaultKeywords() {
+  const keywords = await window.api.restoreSampleDefaults();
+  renderSampleCategoryToggles(keywords);
+  renderSampleKeywordEditor(keywords);
 }

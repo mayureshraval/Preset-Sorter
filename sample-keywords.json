@@ -1,0 +1,222 @@
+{
+  "_meta": {
+    "protected": [
+      "Kick", "Snare", "HiHat", "Clap", "Percussion",
+      "Bass Loop", "Melody Loop", "Chord Loop", "Drum Loop",
+      "FX", "Vocal", "Foley", "Ambience",
+      "One Shot", "MIDI", "Full Mix", "Misc"
+    ]
+  },
+
+  "Kick": {
+    "default": [
+      "kick", "kik", "bd", "bass drum", "bassdrum",
+      "kick drum", "808 kick", "sub kick", "punchy kick",
+      "deep kick", "hard kick", "soft kick", "vinyl kick",
+      "acoustic kick", "processed kick", "distorted kick",
+      "layered kick", "transient kick", "thump", "boom",
+      "kd", "kick_", "_kick", "kick1", "kick2", "kick3"
+    ],
+    "custom": []
+  },
+
+  "Snare": {
+    "default": [
+      "snare", "snr", "sd", "snare drum", "rimshot",
+      "rim", "cross stick", "crossstick", "clack",
+      "acoustic snare", "electronic snare", "vinyl snare",
+      "tight snare", "fat snare", "crack", "snap snare",
+      "layered snare", "pitched snare", "ghost snare",
+      "snare roll", "flam", "brush snare", "snare_", "_snare",
+      "snr1", "snr2", "sn ", " sn_"
+    ],
+    "custom": []
+  },
+
+  "HiHat": {
+    "default": [
+      "hihat", "hi-hat", "hi hat", "hh", "hat",
+      "open hat", "closed hat", "openhat", "closedhat",
+      "pedal hat", "cymbal", "ride", "ride cymbal",
+      "crash", "crash cymbal", "stack", "china cymbal",
+      "splash", "ohat", "chat", "ohh", "chh",
+      "hat open", "hat closed", "hihat open", "hihat closed",
+      "shaker hat", "hh_", "_hh", "hihat_", "_hihat"
+    ],
+    "custom": []
+  },
+
+  "Clap": {
+    "default": [
+      "clap", "clp", "snap", "finger snap",
+      "handclap", "hand clap", "layered clap",
+      "tight clap", "reverb clap", "dry clap",
+      "acoustic clap", "electronic clap", "vinyl clap",
+      "909 clap", "808 clap", "trap clap",
+      "clap_", "_clap", "clap1", "clap2"
+    ],
+    "custom": []
+  },
+
+  "Percussion": {
+    "default": [
+      "perc", "percussion", "conga", "bongo", "tom",
+      "floor tom", "rack tom", "timbale", "cowbell",
+      "agogo", "shaker", "tamb", "tambourine",
+      "maracas", "cabasa", "guiro", "woodblock",
+      "claves", "triangle", "castanets", "djembe",
+      "darbuka", "doumbek", "cajon", "tabla",
+      "rim perc", "ethnic perc", "latin perc",
+      "perc loop", "afro perc", "tribal", "tick",
+      "perc_", "_perc", "prc"
+    ],
+    "custom": []
+  },
+
+  "Drum Loop": {
+    "default": [
+      "drum loop", "drumloop", "beat", "groove",
+      "full kit", "full beat", "break", "breakbeat",
+      "amen", "think break", "loops drums",
+      "hip hop drums", "trap beat", "house beat",
+      "techno beat", "dnb beat", "jungle beat",
+      "funk groove", "soul beat", "live drums",
+      "acoustic drums", "drum fill", "fill",
+      "drum break", "loop beat", "drum_loop"
+    ],
+    "custom": []
+  },
+
+  "Bass Loop": {
+    "default": [
+      "bass loop", "bassloop", "bass line", "bassline",
+      "sub loop", "808 loop", "bass groove",
+      "walking bass", "pluck bass loop", "synth bass loop",
+      "electric bass loop", "slap bass loop",
+      "bass riff", "bass phrase", "bass pattern",
+      "low loop", "deep loop", "bass_loop"
+    ],
+    "custom": []
+  },
+
+  "Melody Loop": {
+    "default": [
+      "melody", "melodic", "melody loop", "melodic loop",
+      "lead loop", "topline", "hook", "riff",
+      "arp loop", "arpeggio loop", "synth loop",
+      "piano loop", "keys loop", "guitar loop",
+      "flute loop", "strings loop", "pad loop",
+      "phrase", "lick", "motif", "musical phrase",
+      "chord melody", "solo loop", "instrument loop"
+    ],
+    "custom": []
+  },
+
+  "Chord Loop": {
+    "default": [
+      "chord", "chords", "chord loop", "chord progression",
+      "stab", "chord stab", "pad loop", "chord pad",
+      "progression", "harmony", "harmonic",
+      "piano chords", "organ chords", "guitar chords",
+      "synth chords", "comping", "voicing",
+      "maj chord", "min chord", "chord_loop"
+    ],
+    "custom": []
+  },
+
+  "FX": {
+    "default": [
+      "fx", "sfx", "effect", "riser", "uplifter",
+      "downlifter", "whoosh", "sweep", "transition",
+      "impact", "boom fx", "reverse", "glitch",
+      "stutter", "noise sweep", "white noise",
+      "zap", "laser", "sci fi", "scifi",
+      "foley fx", "horror fx", "tension",
+      "buildup", "drop fx", "splash", "tail",
+      "atmosphere fx", "riser_", "_riser", "swell",
+      "crash fx", "hit", "cinematic hit"
+    ],
+    "custom": []
+  },
+
+  "Vocal": {
+    "default": [
+      "vocal", "vox", "voice", "acapella", "acap",
+      "sing", "sung", "chant", "rap",
+      "spoken word", "spoken", "breath", "breathe",
+      "female vocal", "male vocal", "choir",
+      "harmony vocal", "background vocal", "bgv",
+      "ad lib", "adlib", "vocal chop", "chopped",
+      "pitched vocal", "vocal fx", "vocoder",
+      "talkbox", "robot vocal", "vocal loop",
+      "vocal phrase", "vocal sample", "hook vocal"
+    ],
+    "custom": []
+  },
+
+  "Foley": {
+    "default": [
+      "foley", "footstep", "step", "door", "creak",
+      "cloth", "fabric", "glass", "break",
+      "wood", "crack", "earth", "gravel",
+      "metal", "clank", "hit fx", "body",
+      "paper", "plastic", "water", "drip",
+      "rain", "thunder", "fire", "crackle",
+      "wind", "leaves", "nature", "object"
+    ],
+    "custom": []
+  },
+
+  "Ambience": {
+    "default": [
+      "ambience", "ambient", "atmosphere", "atmos",
+      "room", "space", "reverb tail", "pad ambient",
+      "drone", "texture", "soundscape", "background",
+      "field recording", "env", "environment",
+      "outdoor", "indoor", "forest", "rain ambience",
+      "city", "crowd", "noise", "static",
+      "hum", "buzz", "tape", "vinyl crackle",
+      "lo fi", "lofi", "cassette", "warmth"
+    ],
+    "custom": []
+  },
+
+  "One Shot": {
+    "default": [
+      "one shot", "oneshot", "one_shot", "1shot",
+      "hit", "stab", "single", "shot",
+      "note", "pluck shot", "bell shot",
+      "synth shot", "piano note", "key note",
+      "instrument shot", "short", "attack",
+      "punchy", "transient", "smash", "slam"
+    ],
+    "custom": []
+  },
+
+  "MIDI": {
+    "default": [
+      "midi", "mid", "pattern", "sequence",
+      "progression", "groove midi", "chord midi",
+      "melody midi", "bass midi", "arp midi",
+      "drum midi", "beat midi", "loop midi",
+      "quantized", "piano roll"
+    ],
+    "custom": []
+  },
+
+  "Full Mix": {
+    "default": [
+      "full mix", "fullmix", "stem", "mixdown",
+      "master", "mastered", "final", "complete",
+      "track", "song", "full track", "radio edit",
+      "instrumental", "acapella mix", "extended",
+      "club mix", "remix"
+    ],
+    "custom": []
+  },
+
+  "Misc": {
+    "default": [],
+    "custom": []
+  }
+}
