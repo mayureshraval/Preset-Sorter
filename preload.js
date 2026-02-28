@@ -21,6 +21,12 @@ contextBridge.exposeInMainWorld("api", {
   openFolder: (path) =>
   ipcRenderer.invoke("open-folder", path),
 
+  showInFolder: (filePath) =>
+    ipcRenderer.invoke("show-in-folder", filePath),
+
+  deleteFile: (filePath) =>
+    ipcRenderer.invoke("delete-file", filePath),
+
   chooseFolder: () =>
     ipcRenderer.invoke("choose-folder"),
 getVersion: () => ipcRenderer.invoke("get-version"),

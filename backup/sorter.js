@@ -403,7 +403,8 @@ async function previewSort(sourceDir, progressCallback = null) {
           category,
           confidence,
           intelligence,
-          pluginName
+          pluginName,
+          size: stat.size
         });
 
         processed++;
@@ -415,20 +416,78 @@ async function previewSort(sourceDir, progressCallback = null) {
   }
 
   await scan(sourceDir);
+
+  // ── Duplicate detection: mark files with identical basenames ──────────────
+  const nameCounts = {};
+  for (const item of results) {
+    const key = item.file.toLowerCase();
+    nameCounts[key] = (nameCounts[key] || 0) + 1;
+  }
+  for (const item of results) {
+    item.isDuplicate = nameCounts[item.file.toLowerCase()] > 1;
+  }
+
   return results;
 }
 
-async function executeSort(sourceDir, previewData, progressCallback) {
+/**
+ * Builds the output root folder name from the parent folder name + active
+ * key filter + BPM range, following the convention:
+ *   NEW_PARENTNAME[_KEY][_BPMmin-BPMmax]
+ * e.g.  NEW_SAMPLEMUSICFOLDER_Am_120-160
+ *       NEW_SAMPLEMUSICFOLDER_Major
+ *       NEW_SAMPLEMUSICFOLDER_80-100
+ *       NEW_SAMPLEMUSICFOLDER   (no filter active)
+ */
+function buildSortRootName(sourceDir, keyFilter, bpmRange) {
+  const baseName = path.basename(sourceDir);
+  const parts = [`NEW_${baseName}`];
+
+  // Key suffix
+  if (keyFilter && keyFilter.mode && keyFilter.mode !== "all") {
+    if (keyFilter.mode === "major") {
+      parts.push("Major");
+    } else if (keyFilter.mode === "minor") {
+      parts.push("Minor");
+    } else if (keyFilter.mode === "notes" && keyFilter.notes?.length) {
+      // e.g. "Am_C#m" — join with underscore, sanitize characters
+      const noteStr = keyFilter.notes
+        .map(n => n.replace(/[^a-zA-Z0-9#b]/g, ""))
+        .join("_");
+      if (noteStr) parts.push(noteStr);
+    }
+  }
+
+  // BPM suffix — only add when range is not the default 0-300
+  if (bpmRange) {
+    const min = Math.round(bpmRange.min || 0);
+    const max = Math.round(bpmRange.max ?? 300);
+    const hasMin = min > 0;
+    const hasMax = max < 300;
+    if (hasMin || hasMax) {
+      parts.push(min === max ? `${min}BPM` : `${min}-${max}BPM`);
+    }
+  }
+
+  return parts.join("_");
+}
+
+async function executeSort(sourceDir, previewData, progressCallback, keyFilter, bpmRange) {
   const moved = [];
   const createdFolders = new Set();
 
+  // Build the output root folder (sibling of sourceDir with NEW_ prefix + suffixes)
+  const sortRootName = buildSortRootName(sourceDir, keyFilter, bpmRange);
+  const sortRoot     = path.join(path.dirname(sourceDir), sortRootName);
+
   for (let i = 0; i < previewData.length; i++) {
     const item = previewData[i];
-    const folderPath = path.join(sourceDir, item.category);
+    const folderPath = path.join(sortRoot, item.category);
 
     try {
       await fs.mkdir(folderPath, { recursive: true });
       createdFolders.add(folderPath);
+      createdFolders.add(sortRoot); // always track the root so undo can clean it
 
       let dest = path.join(folderPath, item.file);
       dest = await resolveDuplicate(dest);
@@ -448,10 +507,10 @@ async function executeSort(sourceDir, previewData, progressCallback) {
   const logPath = getLogPath();
   await fs.writeFile(
     logPath,
-    JSON.stringify({ moved, createdFolders: Array.from(createdFolders) }, null, 2)
+    JSON.stringify({ moved, createdFolders: Array.from(createdFolders), sourceDir, sortRoot }, null, 2)
   );
 
-  return moved.length;
+  return { count: moved.length, newFolders: Array.from(createdFolders) };
 }
 
 async function undoLastMove() {
@@ -459,13 +518,12 @@ async function undoLastMove() {
 
   try {
     const logData = await fs.readFile(logPath, "utf-8");
-    const { moved, createdFolders } = JSON.parse(logData);
+    const { moved, createdFolders, sourceDir: loggedSourceDir } = JSON.parse(logData);
 
-    // Derive the source folder from the first moved item's original location
-    // so the renderer can open it even after a New Session (currentFolder = null)
-    const sourceFolder = moved.length > 0
-      ? path.dirname(moved[0].from)
-      : null;
+    // Use the saved sourceDir (the folder the user originally selected).
+    // Fall back to dirname of first moved item's original path if not saved (old logs).
+    const sourceFolder = loggedSourceDir
+      || (moved.length > 0 ? path.dirname(moved[0].from) : null);
 
     for (const item of moved) {
       try {
@@ -473,10 +531,11 @@ async function undoLastMove() {
       } catch {}
     }
 
-    for (const folder of createdFolders) {
+    // Delete created folders — sort by path length descending so deepest first
+    const sortedFolders = [...createdFolders].sort((a, b) => b.length - a.length);
+    for (const folder of sortedFolders) {
       try {
-        const files = await fs.readdir(folder);
-        if (!files.length) await fs.rmdir(folder);
+        await deleteFolderIfEmpty(folder);
       } catch {}
     }
 
@@ -487,6 +546,24 @@ async function undoLastMove() {
   } catch {
     return { count: 0, sourceFolder: null };
   }
+}
+
+// Recursively delete a folder and its empty parent folders up to (but not including) the source root
+async function deleteFolderIfEmpty(folderPath) {
+  try {
+    const files = await fs.readdir(folderPath);
+    if (files.length === 0) {
+      await fs.rmdir(folderPath);
+      // Also try to remove parent if now empty
+      const parent = path.dirname(folderPath);
+      try {
+        const parentFiles = await fs.readdir(parent);
+        if (parentFiles.length === 0) {
+          await fs.rmdir(parent);
+        }
+      } catch {}
+    }
+  } catch {}
 }
 
 module.exports = {

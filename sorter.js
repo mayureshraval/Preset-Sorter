@@ -417,14 +417,54 @@ async function previewSort(sourceDir, progressCallback = null) {
 
   await scan(sourceDir);
 
-  // ── Duplicate detection: mark files with identical basenames ──────────────
-  const nameCounts = {};
+  // ── Duplicate detection ────────────────────────────────────────────────────
+  // Group files by lowercase filename.
+  // Within each name group, compare file sizes:
+  //   • Same name + same size  → true duplicate   (isDuplicate: true,  duplicateType: "exact")
+  //   • Same name + diff size  → name collision    (isDuplicate: true,  duplicateType: "variant")
+  // The first occurrence of an exact duplicate is kept (isKeptCopy: true);
+  // all subsequent exact copies are marked for removal.
+
+  // Step 1: group by name
+  const nameGroups = {};
   for (const item of results) {
     const key = item.file.toLowerCase();
-    nameCounts[key] = (nameCounts[key] || 0) + 1;
+    if (!nameGroups[key]) nameGroups[key] = [];
+    nameGroups[key].push(item);
   }
-  for (const item of results) {
-    item.isDuplicate = nameCounts[item.file.toLowerCase()] > 1;
+
+  for (const items of Object.values(nameGroups)) {
+    if (items.length === 1) {
+      // Only one file with this name — definitely not a duplicate
+      items[0].isDuplicate    = false;
+      items[0].duplicateType  = null;
+      items[0].isKeptCopy     = false;
+      continue;
+    }
+
+    // Step 2: within the name group, sub-group by size
+    const sizeGroups = {};
+    for (const item of items) {
+      const sk = String(item.size);
+      if (!sizeGroups[sk]) sizeGroups[sk] = [];
+      sizeGroups[sk].push(item);
+    }
+
+    for (const sizeItems of Object.values(sizeGroups)) {
+      if (sizeItems.length > 1) {
+        // Multiple files with exactly the same name AND size → true exact duplicates
+        sizeItems.forEach((item, idx) => {
+          item.isDuplicate   = true;
+          item.duplicateType = "exact";
+          item.isKeptCopy    = idx === 0; // keep only the first one
+        });
+      } else {
+        // Same name, different size → a variant/different version
+        sizeItems[0].isDuplicate   = true;
+        sizeItems[0].duplicateType = "variant";
+        sizeItems[0].isKeptCopy    = false; // variants are never auto-removed
+      }
+    }
   }
 
   return results;

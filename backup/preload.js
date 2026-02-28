@@ -27,8 +27,8 @@ getVersion: () => ipcRenderer.invoke("get-version"),
  preview: (path, categories, intelligenceMode) =>
   ipcRenderer.invoke("preview-sort", path, categories, intelligenceMode),
 
-  execute: (path, data, intelligenceMode) =>
-    ipcRenderer.invoke("execute-sort", path, data, intelligenceMode),
+ execute: (path, data, keyFilter, bpmRange) =>
+    ipcRenderer.invoke("execute-sort", path, data, keyFilter, bpmRange),
 
   undo: () =>
     ipcRenderer.invoke("undo-sort"),
@@ -58,7 +58,7 @@ getVersion: () => ipcRenderer.invoke("get-version"),
 
   // ─── Sample Sorter API ──────────────────────────────────────────────────────
   samplePreview:         (path, intelligenceMode) => ipcRenderer.invoke("preview-sample-sort", path, intelligenceMode),
-  sampleExecute:         (path, data, keyFilter) => ipcRenderer.invoke("execute-sample-sort", path, data, keyFilter),
+  sampleExecute:         (path, data, keyFilter, bpmRange) => ipcRenderer.invoke("execute-sample-sort", path, data, keyFilter, bpmRange),
   sampleUndo:            () => ipcRenderer.invoke("undo-sample-sort"),
   getSampleKeywords:     () => ipcRenderer.invoke("get-sample-keywords"),
   saveSampleKeywords:    (data) => ipcRenderer.invoke("save-sample-keywords", data),

@@ -617,6 +617,47 @@
       50%       { transform: translateY(-6px); opacity: 0.75; }
     }
 
+    /* ── Analyzing state animations ── */
+    @keyframes analyzeIconPulse {
+      0%, 100% { transform: scale(1)    translateY(0);    filter: drop-shadow(0 0 8px rgba(148,0,211,0.4)); }
+      40%       { transform: scale(1.12) translateY(-4px); filter: drop-shadow(0 0 22px rgba(192,132,252,0.9)); }
+      70%       { transform: scale(0.96) translateY(-1px); filter: drop-shadow(0 0 12px rgba(148,0,211,0.6)); }
+    }
+
+    @keyframes analyzeBarShimmer {
+      0%   { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    /* ── Sort animation ── */
+    @keyframes sortIconSpin {
+      0%   { transform: rotate(0deg)   scale(1);    filter: drop-shadow(0 0 8px rgba(148,0,211,0.5)); }
+      50%  { transform: rotate(180deg) scale(1.15); filter: drop-shadow(0 0 20px rgba(192,132,252,0.9)); }
+      100% { transform: rotate(360deg) scale(1);    filter: drop-shadow(0 0 8px rgba(148,0,211,0.5)); }
+    }
+
+    /* ── Undo animation ── */
+    @keyframes undoIconRewind {
+      0%, 100% { transform: scale(1)    rotate(0deg);    filter: drop-shadow(0 0 8px rgba(148,0,211,0.4)); }
+      30%       { transform: scale(1.15) rotate(-20deg);  filter: drop-shadow(0 0 22px rgba(192,132,252,0.9)); }
+      60%       { transform: scale(0.95) rotate(5deg);    filter: drop-shadow(0 0 12px rgba(148,0,211,0.6)); }
+    }
+
+    @keyframes undoDotBounce {
+      0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+      40%            { transform: scale(1.3); opacity: 1; background: #c084fc; }
+    }
+
+    /* Block pointer events on the preview box during analysis */
+    .preview-box.is-analyzing {
+      cursor: not-allowed !important;
+      pointer-events: none;
+    }
+    /* Re-allow pointer events on the canvas text overlay (for visual only) */
+    #analyzeCanvas, #analyzeTextWrap {
+      pointer-events: none;
+    }
+
     
     /* ================= VIEW SWITCHER ================= */
 
@@ -1361,6 +1402,364 @@
       user-select: none;
     }
 
+    /* Exact duplicate that will be skipped — dimmed strikethrough style */
+    .duplicate-badge.dup-skipped {
+      background: rgba(120, 120, 120, 0.12);
+      color: #666;
+      border-color: rgba(120, 120, 120, 0.25);
+      text-decoration: line-through;
+      opacity: 0.7;
+    }
+
+    /* Clickable badge opens duplicate manager */
+    .dup-warn-clickable {
+      cursor: pointer !important;
+      transition: background 0.15s, border-color 0.15s, transform 0.1s !important;
+    }
+    .dup-warn-clickable:hover {
+      background: rgba(255,165,0,0.28) !important;
+      border-color: rgba(255,165,0,0.65) !important;
+      transform: translateY(-1px);
+    }
+
+    /* ── Duplicates Manager Modal ──────────────────────────────────── */
+    #dupManagerOverlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.65);
+      backdrop-filter: blur(5px);
+      -webkit-backdrop-filter: blur(5px);
+      z-index: 10000;
+      align-items: center;
+      justify-content: center;
+    }
+    #dupManagerOverlay.visible { display: flex; }
+
+    #dupManagerDialog {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      width: min(820px, 94vw);
+      max-height: 82vh;
+      box-shadow: 0 28px 70px rgba(0,0,0,0.55), 0 0 0 1px rgba(148,0,211,0.22);
+      display: flex;
+      flex-direction: column;
+      animation: dialogIn 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+      overflow: hidden;
+    }
+
+    /* Header */
+    #dupManagerDialog .dup-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 18px 22px 14px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    #dupManagerDialog .dup-header-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+      flex: 1;
+    }
+    #dupManagerDialog .dup-header-sub {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+    #dupManagerDialog .dup-close-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-dim);
+      font-size: 18px;
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 6px;
+      line-height: 1;
+      transform: none !important;
+      transition: color 0.15s, background 0.15s;
+    }
+    #dupManagerDialog .dup-close-btn:hover {
+      color: var(--text);
+      background: rgba(255,255,255,0.08);
+    }
+
+    /* Tab bar */
+    #dupManagerDialog .dup-tabs {
+      display: flex;
+      gap: 0;
+      padding: 0 22px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      background: var(--card);
+    }
+    #dupManagerDialog .dup-tab {
+      padding: 9px 16px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-dim);
+      cursor: pointer;
+      border: none;
+      background: transparent;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      transition: color 0.15s, border-color 0.15s;
+      transform: none !important;
+    }
+    #dupManagerDialog .dup-tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+    #dupManagerDialog .dup-tab:hover:not(.active) {
+      color: var(--text);
+    }
+
+    /* Toolbar */
+    #dupManagerDialog .dup-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 22px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+    #dupManagerDialog .dup-toolbar-btn {
+      padding: 5px 12px;
+      font-size: 11px;
+      font-weight: 600;
+      border-radius: 7px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.05);
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: all 0.15s;
+      transform: none !important;
+    }
+    #dupManagerDialog .dup-toolbar-btn:hover {
+      background: rgba(255,255,255,0.1);
+      color: var(--text);
+      border-color: rgba(255,255,255,0.2);
+    }
+    #dupManagerDialog .dup-toolbar-btn.danger {
+      border-color: rgba(220,60,60,0.4);
+      color: #f77;
+      background: rgba(220,60,60,0.08);
+    }
+    #dupManagerDialog .dup-toolbar-btn.danger:hover {
+      background: rgba(220,60,60,0.18);
+      border-color: rgba(220,60,60,0.6);
+      color: #ff9a9a;
+    }
+    #dupManagerDialog .dup-toolbar-sep {
+      width: 1px; height: 18px;
+      background: var(--border);
+      flex-shrink: 0;
+    }
+    #dupManagerDialog .dup-selected-count {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-left: auto;
+    }
+
+    /* Scrollable body */
+    #dupManagerDialog .dup-body {
+      overflow-y: auto;
+      flex: 1;
+      padding: 12px 22px 16px;
+    }
+
+    /* Group card */
+    .dup-group {
+      margin-bottom: 14px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .dup-group-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 14px;
+      background: rgba(255,255,255,0.03);
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .dup-group-header .dup-group-name {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .dup-group-type-badge {
+      font-size: 9px;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 4px;
+      letter-spacing: 0.05em;
+      flex-shrink: 0;
+    }
+    .dup-group-type-badge.exact {
+      background: rgba(255,140,0,0.15);
+      color: #ffaa33;
+      border: 1px solid rgba(255,140,0,0.35);
+    }
+    .dup-group-type-badge.variant {
+      background: rgba(100,160,255,0.12);
+      color: #88bbff;
+      border: 1px solid rgba(100,160,255,0.3);
+    }
+
+    /* File rows inside group */
+    .dup-file-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      transition: background 0.12s;
+    }
+    .dup-file-row:last-child { border-bottom: none; }
+    .dup-file-row:hover { background: rgba(255,255,255,0.03); }
+    .dup-file-row.excluded { opacity: 0.45; }
+
+    .dup-file-check {
+      width: 15px; height: 15px;
+      cursor: pointer;
+      accent-color: #9400D3;
+      flex-shrink: 0;
+    }
+    .dup-file-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .dup-file-name {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .dup-file-path {
+      font-size: 10px;
+      color: var(--text-dim);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      margin-top: 1px;
+      opacity: 0.7;
+    }
+    .dup-file-size {
+      font-size: 10px;
+      color: var(--text-dim);
+      flex-shrink: 0;
+      min-width: 54px;
+      text-align: right;
+    }
+    .dup-kept-badge {
+      font-size: 9px;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: rgba(0,200,100,0.12);
+      color: #30e870;
+      border: 1px solid rgba(0,200,100,0.3);
+      flex-shrink: 0;
+      letter-spacing: 0.04em;
+    }
+
+    /* Per-file action buttons */
+    .dup-file-actions {
+      display: flex;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    .dup-action-btn {
+      padding: 3px 8px;
+      font-size: 10px;
+      font-weight: 600;
+      border-radius: 5px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.04);
+      color: var(--text-dim);
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.14s;
+      transform: none !important;
+    }
+    .dup-action-btn:hover {
+      background: rgba(255,255,255,0.1);
+      color: var(--text);
+    }
+    .dup-action-btn.locate:hover {
+      background: rgba(100,180,255,0.12);
+      color: #88bbff;
+      border-color: rgba(100,180,255,0.35);
+    }
+    .dup-action-btn.delete-btn:hover {
+      background: rgba(220,60,60,0.15);
+      color: #ff8888;
+      border-color: rgba(220,60,60,0.45);
+    }
+
+    /* Footer */
+    #dupManagerDialog .dup-footer {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+      padding: 14px 22px;
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    #dupManagerDialog .dup-footer-apply {
+      padding: 9px 22px;
+      font-size: 13px;
+      font-weight: 700;
+      border-radius: 9px;
+      border: 1px solid rgba(148,0,211,0.5);
+      background: rgba(148,0,211,0.15);
+      color: var(--accent);
+      cursor: pointer;
+      transition: all 0.15s;
+      transform: none !important;
+    }
+    #dupManagerDialog .dup-footer-apply:hover {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: white;
+    }
+    #dupManagerDialog .dup-footer-cancel {
+      padding: 9px 18px;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: 9px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: all 0.15s;
+      transform: none !important;
+    }
+    #dupManagerDialog .dup-footer-cancel:hover {
+      background: rgba(255,255,255,0.06);
+      color: var(--text);
+    }
+
+    /* Empty state inside modal */
+    .dup-empty {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--text-dim);
+      font-size: 13px;
+      opacity: 0.6;
+    }
+
     /* ================= BPM RANGE SLIDER ================= */
     #bpmSliderContainer {
       display: none;
@@ -1629,6 +2028,26 @@
     </div>
   </div>
 
+  <!-- Duplicates Manager Modal -->
+  <div id="dupManagerOverlay">
+    <div id="dupManagerDialog">
+      <div class="dup-header">
+        <div>
+          <div class="dup-header-title">🗂 Duplicates Manager</div>
+          <div class="dup-header-sub" id="dupManagerSub">Review and manage duplicate files before sorting</div>
+        </div>
+        <button class="dup-close-btn" onclick="closeDupManager()" title="Close">✕</button>
+      </div>
+      <div class="dup-tabs" id="dupManagerTabs"></div>
+      <div class="dup-toolbar" id="dupManagerToolbar"></div>
+      <div class="dup-body" id="dupManagerBody"></div>
+      <div class="dup-footer">
+        <button class="dup-footer-cancel" onclick="closeDupManager()">Close</button>
+        <button class="dup-footer-apply" onclick="applyDupManagerSelections()">Apply &amp; Close</button>
+      </div>
+    </div>
+  </div>
+
   <div class="app">
 
     <div class="header">
@@ -1766,7 +2185,7 @@
                   bpmRange.min=v;
                   const mi=document.getElementById('bpmMinInput');
                   if(mi)mi.value=v;
-                  updateBpmRangeDisplay();applyFilter();
+                  updateBpmRangeDisplay();scheduleBpmFilter();
                 ">
               <input type="range" id="bpmMax" min="0" max="300" value="300" step="1"
                 oninput="
@@ -1776,7 +2195,7 @@
                   bpmRange.max=v;
                   const ma=document.getElementById('bpmMaxInput');
                   if(ma)ma.value=v;
-                  updateBpmRangeDisplay();applyFilter();
+                  updateBpmRangeDisplay();scheduleBpmFilter();
                 ">
             </div>
           </div>

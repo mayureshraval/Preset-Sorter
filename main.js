@@ -101,6 +101,24 @@ ipcMain.handle("open-folder", (event, folderPath) => {
   if (folderPath) shell.openPath(folderPath);
 });
 
+ipcMain.handle("show-in-folder", (event, filePath) => {
+  if (filePath) shell.showItemInFolder(filePath);
+});
+
+ipcMain.handle("delete-file", async (event, filePath) => {
+  if (!filePath) return { success: false, error: "No path provided" };
+  try {
+    const { fs: fsPromises } = require("fs").promises
+      ? { fs: require("fs").promises }
+      : { fs: require("fs/promises") };
+    // Use require("fs").promises for compatibility across Node versions
+    await require("fs").promises.unlink(filePath);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
 ipcMain.handle("undo-sort", () => sorter.undoLastMove());
 
 ipcMain.handle("restore-defaults", () => sorter.getDefaultKeywords());

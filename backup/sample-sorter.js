@@ -762,6 +762,17 @@ async function previewSampleSort(sourceDir, intelligenceMode = false, progressCa
   }
 
   await scan(sourceDir);
+
+  // ── Duplicate detection ───────────────────────────────────────────────────
+  const nameCounts = {};
+  for (const item of results) {
+    const key = item.file.toLowerCase();
+    nameCounts[key] = (nameCounts[key] || 0) + 1;
+  }
+  for (const item of results) {
+    item.isDuplicate = nameCounts[item.file.toLowerCase()] > 1;
+  }
+
   return results;
 }
 
@@ -784,33 +795,43 @@ async function previewSampleSort(sourceDir, intelligenceMode = false, progressCa
 // This keeps the sorted output isolated and tidy — nothing gets dumped
 // alongside the original unsorted files.
 
-function buildKeyParentName(sourceDir, keyFilter) {
-  if (!keyFilter || keyFilter.mode === "all") return null;
-
+function buildKeyParentName(sourceDir, keyFilter, bpmRange) {
   const sourceName = path.basename(sourceDir);
-  let label = "";
+  const parts = [`NEW_${sourceName}`];
 
-  if (keyFilter.mode === "major") {
-    label = "Major";
-  } else if (keyFilter.mode === "minor") {
-    label = "Minor";
-  } else if (keyFilter.mode === "notes" && keyFilter.notes?.length) {
-    label = keyFilter.notes.join(", ");
+  // Key suffix
+  if (keyFilter && keyFilter.mode && keyFilter.mode !== "all") {
+    if (keyFilter.mode === "major") {
+      parts.push("Major");
+    } else if (keyFilter.mode === "minor") {
+      parts.push("Minor");
+    } else if (keyFilter.mode === "notes" && keyFilter.notes?.length) {
+      const noteStr = keyFilter.notes
+        .map(n => n.replace(/[^a-zA-Z0-9#b]/g, ""))
+        .join("_");
+      if (noteStr) parts.push(noteStr);
+    }
   }
 
-  return label ? `${sourceName} [${label}]` : null;
+  // BPM suffix — only when range is not default 0-300
+  if (bpmRange) {
+    const min = Math.round(bpmRange.min || 0);
+    const max = Math.round(bpmRange.max ?? 300);
+    if (min > 0 || max < 300) {
+      parts.push(min === max ? `${min}BPM` : `${min}-${max}BPM`);
+    }
+  }
+
+  return parts.join("_");
 }
 
-async function executeSampleSort(sourceDir, previewData, progressCallback, keyFilter) {
+async function executeSampleSort(sourceDir, previewData, progressCallback, keyFilter, bpmRange) {
   const moved          = [];
   const createdFolders = new Set();
 
-  // When a key filter is active, all sorted files go inside a dedicated
-  // parent folder: SourceFolder/SourceFolder [Am]/Category/file.wav
-  const keyParentName = buildKeyParentName(sourceDir, keyFilter);
-  const sortRoot      = keyParentName
-    ? path.join(sourceDir, keyParentName)
-    : sourceDir;
+  // Always create a NEW_* root folder — sibling of sourceDir
+  const sortRootName = buildKeyParentName(sourceDir, keyFilter, bpmRange);
+  const sortRoot     = path.join(path.dirname(sourceDir), sortRootName);
 
   for (let i = 0; i < previewData.length; i++) {
     const item       = previewData[i];
@@ -820,7 +841,7 @@ async function executeSampleSort(sourceDir, previewData, progressCallback, keyFi
     try {
       await fs.mkdir(folderPath, { recursive: true });
       createdFolders.add(folderPath);
-      if (keyParentName) createdFolders.add(sortRoot);
+      createdFolders.add(sortRoot);
 
       let dest = path.join(folderPath, item.file);
       dest     = await resolveSampleDuplicate(dest);
@@ -837,22 +858,38 @@ async function executeSampleSort(sourceDir, previewData, progressCallback, keyFi
 
   const logPath = getSampleLogPath();
   await fs.writeFile(logPath, JSON.stringify(
-    { moved, createdFolders: Array.from(createdFolders) }, null, 2
+    { moved, createdFolders: Array.from(createdFolders), sourceDir, sortRoot }, null, 2
   ));
 
-  return moved.length;
+  return { count: moved.length, newFolders: Array.from(createdFolders) };
 }
 
 // ─── Undo ─────────────────────────────────────────────────────────────────────
 async function undoLastSampleMove() {
   const logPath = getSampleLogPath();
   try {
-    const { moved, createdFolders } = JSON.parse(await fs.readFile(logPath, "utf-8"));
-    const sourceFolder = moved.length > 0 ? path.dirname(moved[0].from) : null;
+    const { moved, createdFolders, sourceDir: loggedSourceDir } = JSON.parse(await fs.readFile(logPath, "utf-8"));
+    // Use saved sourceDir (originally selected folder); fall back to old behavior
+    const sourceFolder = loggedSourceDir
+      || (moved.length > 0 ? path.dirname(moved[0].from) : null);
 
     for (const item of moved) { try { await fs.rename(item.to, item.from); } catch {} }
-    for (const folder of createdFolders) {
-      try { if (!(await fs.readdir(folder)).length) await fs.rmdir(folder); } catch {}
+
+    // Sort deepest paths first so child folders are deleted before parents
+    const sortedFolders = [...createdFolders].sort((a, b) => b.length - a.length);
+    for (const folder of sortedFolders) {
+      try {
+        const files = await fs.readdir(folder);
+        if (!files.length) {
+          await fs.rmdir(folder);
+          // Try to remove parent too if now empty
+          const parent = path.dirname(folder);
+          try {
+            const pf = await fs.readdir(parent);
+            if (!pf.length) await fs.rmdir(parent);
+          } catch {}
+        }
+      } catch {}
     }
 
     await fs.unlink(logPath);

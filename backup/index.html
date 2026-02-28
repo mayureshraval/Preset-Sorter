@@ -15,6 +15,169 @@
       --card: #181824;
       --border: #2a2a38;
       --text: #f5f5f5;
+      --text-dim: #888;
+      --preview-bg: #12121c;
+      --file-row-hover: rgba(148, 0, 211, 0.08);
+      --folder-header-bg: rgba(148, 0, 211, 0.08);
+    }
+
+    /* ─── LIGHT THEME ─── */
+    [data-theme="light"] {
+      --bg: #f0f0f8;
+      --card: #ffffff;
+      --border: #d0d0e0;
+      --text: #1a1a2e;
+      --text-dim: #666;
+      --lavender: #6600aa;
+      --accent: #9400D3;
+      --preview-bg: #f5f5fc;
+      --file-row-hover: rgba(148, 0, 211, 0.06);
+      --folder-header-bg: rgba(148, 0, 211, 0.06);
+      --tag-inactive-bg: #e8e8f0;
+      --tag-inactive-color: #555;
+    }
+
+    [data-theme="light"] body {
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    [data-theme="light"] .panel {
+      background: var(--card);
+      box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+    }
+
+    [data-theme="light"] h1 {
+      color: var(--lavender);
+    }
+
+    [data-theme="light"] .folder-block {
+      background: #ededf8;
+      border-color: #d0d0e0;
+    }
+
+    [data-theme="light"] .view-columns .folder-block {
+      background: #ededf8;
+    }
+
+    [data-theme="light"] .file-row {
+      color: #333;
+    }
+
+    [data-theme="light"] .file-chip {
+      background: #ededf8;
+      border-color: #d0d0e0;
+      color: #333;
+    }
+
+    [data-theme="light"] input:not([type="checkbox"]):not([type="radio"]) {
+      background: #efefff;
+      color: var(--text);
+      border-color: var(--border);
+    }
+
+    [data-theme="light"] .category-grid label {
+      background: rgba(148, 0, 211, 0.07);
+      color: var(--text);
+    }
+
+    [data-theme="light"] .category-grid label:hover {
+      background: rgba(148, 0, 211, 0.12);
+    }
+
+    [data-theme="light"] .keyword-tag.default.active {
+      background: var(--primary);
+      color: white;
+    }
+
+    [data-theme="light"] .keyword-tag:not(.active) {
+      background: #e8e8f0;
+      color: #555;
+      border-color: #c8c8dc;
+    }
+
+    [data-theme="light"] .panel-header {
+      color: var(--text);
+      background: rgba(148,0,211,0.04);
+    }
+
+    [data-theme="light"] .mode-tabs {
+      background: var(--card);
+    }
+
+    [data-theme="light"] .mode-tab {
+      color: #666;
+    }
+
+    [data-theme="light"] .mode-tab.active {
+      background: var(--primary);
+      color: white;
+    }
+
+    [data-theme="light"] .status {
+      color: var(--text-dim);
+    }
+
+    [data-theme="light"] .expand-collapse-btn {
+      background: rgba(148, 0, 211, 0.08);
+      color: var(--lavender);
+      border-color: rgba(148, 0, 211, 0.2);
+    }
+
+    [data-theme="light"] .folder-header-row {
+      background: var(--folder-header-bg);
+    }
+
+    [data-theme="light"] .folder-name {
+      color: var(--lavender);
+    }
+
+    [data-theme="light"] .progress {
+      background: #e0e0f0;
+    }
+
+    [data-theme="light"] .preview-box.drag-over {
+      background: #eeeeff;
+    }
+
+    [data-theme="light"] .key-filter-bar {
+      background: rgba(148,0,211,0.05);
+    }
+
+    [data-theme="light"] .key-filter-btn {
+      color: #555;
+      border-color: #ccc;
+    }
+
+    [data-theme="light"] .key-filter-btn:hover {
+      background: rgba(148, 0, 211, 0.1);
+      border-color: var(--primary);
+      color: var(--lavender);
+    }
+
+    [data-theme="light"] .bpm-track-bg {
+      background: #d0d0e8;
+    }
+
+    [data-theme="light"] #bpmSliderContainer {
+      background: rgba(148,0,211,0.04);
+    }
+
+    [data-theme="light"] .bpm-slider-label {
+      color: #666;
+    }
+
+    [data-theme="light"] .keyword-category h4 {
+      color: var(--lavender);
+    }
+
+    [data-theme="light"] .view-controls {
+      background: rgba(148,0,211,0.03);
+      border-bottom-color: var(--border);
+    }
+
+    [data-theme="light"] .folder-count {
+      background: rgba(148,0,211,0.12);
     }
 
     /* ================= BASE ================= */
@@ -310,10 +473,10 @@
       border-color: var(--primary);
     }
 
-    /* Inactive = Gray */
+    /* Inactive = Themed gray */
     .keyword-tag:not(.active) {
-      background: #2a2a38;
-      color: #aaa;
+      background: var(--tag-inactive-bg, #2a2a38);
+      color: var(--tag-inactive-color, #aaa);
     }
 
     /* Default keywords */
@@ -350,7 +513,7 @@
     .preview-box {
       flex: 1;
       overflow-y: auto;
-      background: #12121a;
+      background: var(--preview-bg);
       border-radius: 12px;
       padding: 12px;
       border: 1px solid var(--border);
@@ -360,7 +523,7 @@
       display: flex;
       justify-content: space-between;
       padding: 6px 8px;
-      border-bottom: 1px solid #202030;
+      border-bottom: 1px solid var(--border);
       font-size: 13px;
     }
 
@@ -368,7 +531,7 @@
 
     .progress {
       height: 6px;
-      background: #1a1a25;
+      background: var(--border);
       border-radius: 20px;
       margin-top: 12px;
       overflow: hidden;
@@ -397,7 +560,7 @@
     }
 
     ::-webkit-scrollbar-track {
-      background: #0f0f14;
+      background: var(--bg);
       border-radius: 10px;
     }
 
@@ -411,7 +574,7 @@
     }
 
     ::-webkit-scrollbar-corner {
-      background: #0f0f14;
+      background: var(--bg);
     }
 
     /* ================= DRAG AND DROP ================= */
@@ -420,7 +583,7 @@
       border-color: var(--primary);
       box-shadow: 0 0 0 2px rgba(148, 0, 211, 0.35),
                   inset 0 0 40px rgba(148, 0, 211, 0.08);
-      background: #14101e;
+      background: var(--preview-bg);
     }
 
     .drop-overlay {
@@ -505,7 +668,7 @@
     .expand-collapse-btn {
       background: rgba(255,255,255,0.05);
       border: 1px solid var(--border);
-      color: #ccc;
+      color: var(--text-dim, #ccc);
       padding: 5px 12px;
       border-radius: 8px;
       font-size: 12px;
@@ -573,7 +736,7 @@
     .view-list .file-row {
       padding: 4px 6px;
       font-size: 12px;
-      color: #bbb;
+      color: var(--text-dim, #bbb);
       border-radius: 4px;
       transition: background 0.1s;
       white-space: nowrap;
@@ -582,8 +745,8 @@
     }
 
     .view-list .file-row:hover {
-      background: rgba(255,255,255,0.04);
-      color: white;
+      background: var(--file-row-hover, rgba(255,255,255,0.04));
+      color: var(--text);
     }
 
     /* ================= GRID VIEW ================= */
@@ -596,7 +759,7 @@
     }
 
     .view-grid .folder-block {
-      background: #1a1a28;
+      background: var(--card);
       border: 1px solid var(--border);
       border-radius: 12px;
       width: calc(50% - 6px);
@@ -663,12 +826,12 @@
     }
 
     .view-grid .file-chip {
-      background: rgba(255,255,255,0.05);
-      border: 1px solid rgba(255,255,255,0.08);
+      background: var(--preview-bg);
+      border: 1px solid var(--border);
       border-radius: 6px;
       padding: 3px 8px;
       font-size: 11px;
-      color: #bbb;
+      color: var(--text-dim, #bbb);
       white-space: nowrap;
       max-width: 100%;
       overflow: hidden;
@@ -678,7 +841,7 @@
 
     .view-grid .file-chip:hover {
       background: rgba(148, 0, 211, 0.15);
-      color: white;
+      color: var(--text);
       border-color: rgba(148, 0, 211, 0.3);
     }
 
@@ -697,7 +860,7 @@
     .view-columns .folder-block {
       flex-shrink: 0;
       width: 220px;
-      background: #1a1a28;
+      background: var(--card);
       border: 1px solid var(--border);
       border-radius: 12px;
       display: flex;
@@ -753,7 +916,7 @@
     .view-columns .file-row {
       padding: 5px 12px;
       font-size: 11px;
-      color: #bbb;
+      color: var(--text-dim, #bbb);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -763,7 +926,7 @@
 
     .view-columns .file-row:hover {
       background: rgba(148, 0, 211, 0.12);
-      color: white;
+      color: var(--text);
     }
 
     /* ================= MODE TABS ================= */
@@ -1016,6 +1179,318 @@
       box-shadow: 0 0 6px rgba(40,210,90,0.18);
     }
 
+    .bpm-inputs-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .bpm-inputs-row input[type="number"] {
+      width: 62px;
+      padding: 4px 8px;
+      border-radius: 7px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 600;
+      text-align: center;
+      /* Override the global input reset */
+      width: 62px !important;
+    }
+
+    .bpm-inputs-row input[type="number"]:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(148,0,211,0.2);
+      transform: none;
+    }
+
+    /* Hide number input spinners */
+    .bpm-inputs-row input[type="number"]::-webkit-inner-spin-button,
+    .bpm-inputs-row input[type="number"]::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+
+    .bpm-dash {
+      color: var(--text-dim);
+      font-weight: 600;
+    }
+
+    .bpm-unit {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--accent);
+      letter-spacing: 0.05em;
+    }
+
+    /* ================= UNDO CONFIRM DIALOG ================= */
+
+    #undoConfirmOverlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      z-index: 9999;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #undoConfirmOverlay.visible {
+      display: flex;
+    }
+
+    #undoConfirmDialog {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 28px 32px;
+      width: 360px;
+      max-width: 90vw;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(148,0,211,0.2);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0;
+      animation: dialogIn 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    @keyframes dialogIn {
+      from { opacity: 0; transform: scale(0.88) translateY(8px); }
+      to   { opacity: 1; transform: scale(1)    translateY(0);   }
+    }
+
+    #undoConfirmDialog .dialog-icon {
+      font-size: 36px;
+      margin-bottom: 14px;
+      line-height: 1;
+    }
+
+    #undoConfirmDialog .dialog-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 8px;
+      text-align: center;
+    }
+
+    #undoConfirmDialog .dialog-body {
+      font-size: 13px;
+      color: var(--text-dim);
+      text-align: center;
+      line-height: 1.5;
+      margin-bottom: 24px;
+    }
+
+    #undoConfirmDialog .dialog-body strong {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    #undoConfirmDialog .dialog-buttons {
+      display: flex;
+      gap: 10px;
+      width: 100%;
+    }
+
+    #undoConfirmDialog .dialog-btn-cancel {
+      flex: 1;
+      padding: 10px 0;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-dim);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      transform: none !important;
+    }
+
+    #undoConfirmDialog .dialog-btn-cancel:hover {
+      background: rgba(255,255,255,0.06);
+      border-color: rgba(255,255,255,0.2);
+      color: var(--text);
+      transform: none !important;
+    }
+
+    #undoConfirmDialog .dialog-btn-confirm {
+      flex: 1;
+      padding: 10px 0;
+      border-radius: 10px;
+      border: 1px solid rgba(148,0,211,0.5);
+      background: rgba(148,0,211,0.15);
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      transform: none !important;
+    }
+
+    #undoConfirmDialog .dialog-btn-confirm:hover {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: white;
+      transform: none !important;
+    }
+
+    [data-theme="light"] #undoConfirmDialog {
+      box-shadow: 0 24px 60px rgba(0,0,0,0.18), 0 0 0 1px rgba(148,0,211,0.15);
+    }
+
+    [data-theme="light"] #undoConfirmDialog .dialog-btn-cancel:hover {
+      background: rgba(0,0,0,0.04);
+      border-color: #bbb;
+    }
+    .duplicate-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 1px 6px;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      border-radius: 3px;
+      background: rgba(255, 140, 0, 0.18);
+      color: #ffaa33;
+      border: 1px solid rgba(255, 140, 0, 0.4);
+      white-space: nowrap;
+      flex-shrink: 0;
+      user-select: none;
+    }
+
+    /* ================= BPM RANGE SLIDER ================= */
+    #bpmSliderContainer {
+      display: none;
+      padding: 8px 14px 6px;
+      background: rgba(148, 0, 211, 0.04);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .bpm-slider-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .bpm-range-display {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: 0.02em;
+    }
+
+    .bpm-slider-track {
+      position: relative;
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      margin: 6px 0 12px;
+    }
+
+    #bpmTrackFill {
+      position: absolute;
+      height: 100%;
+      background: var(--primary);
+      border-radius: 2px;
+      pointer-events: none;
+    }
+
+    .bpm-slider-inputs {
+      display: flex;
+      gap: 8px;
+    }
+
+    .bpm-slider-inputs input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      flex: 1;
+      height: 4px;
+      background: transparent;
+      border: none;
+      border-radius: 0;
+      padding: 0;
+      margin: 0;
+      cursor: pointer;
+      position: absolute;
+      top: -1px;
+      left: 0;
+      right: 0;
+      width: 100%;
+      pointer-events: none;
+    }
+
+    .bpm-slider-wrapper {
+      position: relative;
+      height: 4px;
+      margin: 6px 0 16px;
+    }
+
+    .bpm-slider-wrapper input[type="range"] {
+      pointer-events: all;
+      -webkit-appearance: none;
+      appearance: none;
+      position: absolute;
+      width: 100%;
+      height: 4px;
+      background: transparent;
+      border: none;
+      padding: 0;
+      margin: 0;
+      cursor: pointer;
+    }
+
+    .bpm-slider-wrapper input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--primary);
+      border: 2px solid rgba(255,255,255,0.3);
+      cursor: pointer;
+      position: relative;
+      z-index: 2;
+      box-shadow: 0 0 4px rgba(148,0,211,0.5);
+    }
+
+    .bpm-track-bg {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      pointer-events: none;
+    }
+
+    /* ================= THEME TOGGLE BUTTON ================= */
+    #themeToggleBtn {
+      background: transparent;
+      border: 1px solid var(--border);
+      padding: 7px 10px;
+      font-size: 16px;
+      border-radius: 8px;
+      color: var(--text);
+      line-height: 1;
+    }
+
+    #themeToggleBtn:hover {
+      background: rgba(148, 0, 211, 0.15);
+      border-color: var(--primary);
+      transform: none;
+    }
+
     .hidden-panel { display: none !important; }
 
     /* ================= HORIZONTAL DIVIDER (narrow/stacked mode) ================= */
@@ -1139,6 +1614,21 @@
 </head>
 
 <body>
+  <!-- Undo Confirmation Dialog -->
+  <div id="undoConfirmOverlay">
+    <div id="undoConfirmDialog">
+      <div class="dialog-icon">↩️</div>
+      <div class="dialog-title">Undo Sort?</div>
+      <div class="dialog-body">
+        This will move all sorted files <strong>back to their original location</strong> and delete the created folders.
+      </div>
+      <div class="dialog-buttons">
+        <button class="dialog-btn-cancel" onclick="closeUndoConfirm()">Cancel</button>
+        <button class="dialog-btn-confirm" onclick="confirmUndo()">Yes, Undo</button>
+      </div>
+    </div>
+  </div>
+
   <div class="app">
 
     <div class="header">
@@ -1150,6 +1640,7 @@
       </div>
 
       <div class="toolbar">
+        <button id="themeToggleBtn" onclick="toggleTheme()" title="Toggle light/dark theme">☀️</button>
         <button onclick="selectFolder()">Select Folder</button>
         <button onclick="startSort()">Start Sort</button>
         <button onclick="undo()">Undo</button>
@@ -1246,6 +1737,49 @@
         <div class="panel preview-wrapper">
           <div class="panel-header">Preview</div>
           <div id="keyFilterBar" class="key-filter-bar" style="display:none;"></div>
+
+          <!-- BPM Range Slider -->
+          <div id="bpmSliderContainer">
+            <div class="bpm-slider-label">
+              <span>🎵 BPM Filter</span>
+              <div class="bpm-inputs-row">
+                <input type="number" id="bpmMinInput" min="0" max="300" value="0" placeholder="Min"
+                  onchange="commitBpmMin(this.value)"
+                  onblur="commitBpmMin(this.value)"
+                  onkeydown="if(event.key==='Enter')commitBpmMin(this.value)">
+                <span class="bpm-dash">–</span>
+                <input type="number" id="bpmMaxInput" min="0" max="300" value="300" placeholder="Max"
+                  onchange="commitBpmMax(this.value)"
+                  onblur="commitBpmMax(this.value)"
+                  onkeydown="if(event.key==='Enter')commitBpmMax(this.value)">
+                <span class="bpm-unit">BPM</span>
+              </div>
+            </div>
+            <div class="bpm-slider-wrapper" id="bpmSliderWrapper">
+              <div class="bpm-track-bg"></div>
+              <div id="bpmTrackFill" style="position:absolute;top:50%;transform:translateY(-50%);height:4px;background:var(--primary);border-radius:2px;pointer-events:none;left:0%;width:100%;"></div>
+              <input type="range" id="bpmMin" min="0" max="300" value="0" step="1"
+                oninput="
+                  let v=parseInt(this.value);
+                  if(v<0)v=0; if(v>300)v=300;
+                  if(v>bpmRange.max)v=bpmRange.max;
+                  bpmRange.min=v;
+                  const mi=document.getElementById('bpmMinInput');
+                  if(mi)mi.value=v;
+                  updateBpmRangeDisplay();applyFilter();
+                ">
+              <input type="range" id="bpmMax" min="0" max="300" value="300" step="1"
+                oninput="
+                  let v=parseInt(this.value);
+                  if(v<0)v=0; if(v>300)v=300;
+                  if(v<bpmRange.min)v=bpmRange.min;
+                  bpmRange.max=v;
+                  const ma=document.getElementById('bpmMaxInput');
+                  if(ma)ma.value=v;
+                  updateBpmRangeDisplay();applyFilter();
+                ">
+            </div>
+          </div>
           <div class="panel-content preview-wrapper">
             <div id="preview" class="preview-box"></div>
 
