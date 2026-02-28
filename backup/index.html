@@ -766,6 +766,258 @@
       color: white;
     }
 
+    /* ================= MODE TABS ================= */
+
+    .mode-tabs {
+      display: flex;
+      gap: 4px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 4px;
+    }
+
+    .mode-tab {
+      padding: 7px 18px;
+      border-radius: 7px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      background: transparent;
+      color: #888;
+      transition: all 0.18s ease;
+      transform: none !important;
+    }
+
+    .mode-tab:hover {
+      background: rgba(255,255,255,0.06);
+      color: #ccc;
+      transform: none !important;
+    }
+
+    .mode-tab.active {
+      background: var(--primary);
+      color: white;
+    }
+
+    /* ================= SAMPLE TYPE BADGE ================= */
+
+    .sample-type-badge {
+      display: inline-block;
+      padding: 1px 6px;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      border-radius: 3px;
+      vertical-align: middle;
+      white-space: nowrap;
+      flex-shrink: 0;
+      user-select: none;
+      margin-left: 5px;
+    }
+
+    .sample-type-badge.loop {
+      background: rgba(0, 200, 130, 0.15);
+      color: #00c882;
+      border: 1px solid rgba(0, 200, 130, 0.35);
+    }
+
+    .sample-type-badge.one-shot {
+      background: rgba(255, 165, 0, 0.15);
+      color: #ffaa33;
+      border: 1px solid rgba(255, 165, 0, 0.35);
+    }
+
+    /* ================= METADATA CHIPS (BPM / KEY) ================= */
+
+    .meta-chips {
+      display: inline-flex;
+      gap: 4px;
+      margin-left: 6px;
+      vertical-align: middle;
+      flex-shrink: 0;
+    }
+
+    .meta-chip {
+      display: inline-block;
+      padding: 1px 6px;
+      font-size: 9px;
+      font-weight: 600;
+      border-radius: 3px;
+      background: rgba(148, 0, 211, 0.15);
+      color: var(--accent);
+      border: 1px solid rgba(148, 0, 211, 0.3);
+      white-space: nowrap;
+    }
+
+    /* ================= EXT FORMAT BADGE ================= */
+
+    .ext-badge {
+      display: inline-block;
+      padding: 1px 5px;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      border-radius: 3px;
+      background: rgba(255,255,255,0.06);
+      color: #888;
+      border: 1px solid rgba(255,255,255,0.1);
+      margin-left: 5px;
+      vertical-align: middle;
+      flex-shrink: 0;
+      white-space: nowrap;
+      user-select: none;
+    }
+
+    /* ================= SAMPLE KEYWORD PANEL (scrollable, mirrors preset) ================= */
+    #sampleKeywordPanelWrap {
+      flex: 1;
+      min-height: 180px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #sampleKeywordPanelWrap .panel-content {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      flex-direction: column;
+    }
+
+    #sampleKeywordPanelWrap.active .panel-content {
+      display: flex;
+    }
+
+    #sampleKeywordEditor {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+    }
+
+    /* ================= KEY FILTER BAR ================= */
+    .key-filter-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      padding: 8px 12px;
+      background: rgba(148, 0, 211, 0.06);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .key-filter-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-right: 4px;
+      flex-shrink: 0;
+    }
+
+    .key-filter-btn {
+      padding: 3px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: #888;
+      transition: all 0.15s ease;
+      transform: none !important;
+      letter-spacing: 0.03em;
+    }
+
+    .key-filter-btn:hover {
+      background: rgba(148, 0, 211, 0.15);
+      border-color: var(--primary);
+      color: white;
+      transform: none !important;
+    }
+
+    .key-filter-btn.active {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: white;
+    }
+
+    .key-filter-btn.major.active {
+      background: #00897b;
+      border-color: #00897b;
+    }
+
+    .key-filter-btn.minor.active {
+      background: #6a1b9a;
+      border-color: #6a1b9a;
+    }
+
+    .key-filter-sep {
+      width: 1px;
+      height: 16px;
+      background: var(--border);
+      flex-shrink: 0;
+    }
+
+    /* Hidden panels for inactive mode */
+    /* ═══════════════ CONFIDENCE BADGE ═══════════════ */
+    .confidence-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      font-variant-numeric: tabular-nums;
+      min-width: 36px;
+      flex-shrink: 0;
+      border: 1px solid transparent;
+      cursor: default;
+    }
+    /* 0% — unrecognized, grey */
+    .confidence-badge[data-tier="none"] {
+      background: rgba(100,100,100,0.15);
+      color: #555;
+      border-color: #333;
+    }
+    /* 1-25% — red, very weak match */
+    .confidence-badge[data-tier="low"] {
+      background: rgba(200,40,40,0.20);
+      color: #e05555;
+      border-color: rgba(200,40,40,0.38);
+    }
+    /* 26-45% — orange, weak */
+    .confidence-badge[data-tier="medium-low"] {
+      background: rgba(210,110,20,0.20);
+      color: #e08830;
+      border-color: rgba(210,110,20,0.38);
+    }
+    /* 46-65% — yellow, moderate */
+    .confidence-badge[data-tier="medium"] {
+      background: rgba(195,170,10,0.20);
+      color: #ccb020;
+      border-color: rgba(195,170,10,0.38);
+    }
+    /* 66-85% — green, strong */
+    .confidence-badge[data-tier="high"] {
+      background: rgba(80,185,60,0.20);
+      color: #60c848;
+      border-color: rgba(80,185,60,0.38);
+    }
+    /* 86-100% — bright green, very confident */
+    .confidence-badge[data-tier="perfect"] {
+      background: rgba(40,210,90,0.22);
+      color: #30e870;
+      border-color: rgba(40,210,90,0.45);
+      box-shadow: 0 0 6px rgba(40,210,90,0.18);
+    }
+
+    .hidden-panel { display: none !important; }
+
     /* ================= HORIZONTAL DIVIDER (narrow/stacked mode) ================= */
 
     .h-divider {
@@ -891,6 +1143,12 @@
 
     <div class="header">
       <h1>Preset Sorter Pro</h1>
+
+      <div class="mode-tabs">
+        <button class="mode-tab active" id="tabPreset" onclick="switchMode('preset')">🎛️ Presets</button>
+        <button class="mode-tab"        id="tabSample" onclick="switchMode('sample')">🎵 Samples</button>
+      </div>
+
       <div class="toolbar">
         <button onclick="selectFolder()">Select Folder</button>
         <button onclick="startSort()">Start Sort</button>
@@ -903,7 +1161,8 @@
 
       <div class="sidebar" id="sidebar">
 
-        <div class="panel active" id="categoriesPanel">
+        <!-- ── PRESET MODE panels ── -->
+        <div class="panel active preset-only" id="categoriesPanel">
           <div class="panel-header" onclick="togglePanel('categoriesPanel')">
             <span>Categories</span>
             <span class="arrow">▼</span>
@@ -913,7 +1172,7 @@
           </div>
         </div>
 
-        <div class="panel" id="intelligencePanel">
+        <div class="panel preset-only" id="intelligencePanel">
           <div class="panel-header" onclick="togglePanel('intelligencePanel')">
             <span>Intelligence</span>
             <span class="arrow">▼</span>
@@ -921,7 +1180,6 @@
           <div class="panel-content">
             <input type="checkbox" id="intelligenceToggle">
             Enable intelligent metadata detection
-
             <div class="hint">
               Detects BPM, musical key, and mood from preset filenames.
               Displays them in preview before sorting.
@@ -929,13 +1187,52 @@
           </div>
         </div>
 
-        <div class="panel" id="keywordPanelWrap">
+        <div class="panel preset-only" id="keywordPanelWrap">
           <div class="panel-header" onclick="togglePanel('keywordPanelWrap')">
             <span>Keyword Editor</span>
             <span class="arrow">▼</span>
           </div>
           <div class="panel-content">
             <div id="keywordEditor"></div>
+          </div>
+        </div>
+
+        <!-- ── SAMPLE MODE panels ── -->
+        <div class="panel active sample-only hidden-panel" id="sampleCategoriesPanel">
+          <div class="panel-header" onclick="togglePanel('sampleCategoriesPanel')">
+            <span>Sample Categories</span>
+            <span class="arrow" style="transform:rotate(180deg)">▼</span>
+          </div>
+          <div class="panel-content">
+            <div id="sampleCategoryPanel" class="category-grid"></div>
+          </div>
+        </div>
+
+        <div class="panel sample-only hidden-panel" id="sampleIntelligencePanel">
+          <div class="panel-header" onclick="togglePanel('sampleIntelligencePanel')">
+            <span>Intelligence</span>
+            <span class="arrow">▼</span>
+          </div>
+          <div class="panel-content">
+            <input type="checkbox" id="sampleIntelligenceToggle" onchange="onSampleIntelligenceToggle()">
+            Enable intelligent metadata detection
+            <div class="hint">
+              Extracts BPM, musical key, and mood from filenames when binary
+              metadata (ID3/FLAC tags) is missing. Enables the Key filter bar.
+            </div>
+          </div>
+        </div>
+
+        <div class="panel sample-only hidden-panel" id="sampleKeywordPanelWrap">
+          <div class="panel-header" onclick="togglePanel('sampleKeywordPanelWrap')">
+            <span>Keyword Editor</span>
+            <span class="arrow">▼</span>
+          </div>
+          <div class="panel-content">
+            <button onclick="restoreSampleDefaultKeywords()" style="margin-bottom:10px;font-size:12px;padding:6px 12px;">
+              Restore Defaults
+            </button>
+            <div id="sampleKeywordEditor"></div>
           </div>
         </div>
 
@@ -948,6 +1245,7 @@
 
         <div class="panel preview-wrapper">
           <div class="panel-header">Preview</div>
+          <div id="keyFilterBar" class="key-filter-bar" style="display:none;"></div>
           <div class="panel-content preview-wrapper">
             <div id="preview" class="preview-box"></div>
 
@@ -955,7 +1253,10 @@
               <div id="progressFill" class="progress-fill"></div>
             </div>
 
-            <div id="statusText" class="status">Ready.</div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+              <div id="statusText" class="status">Ready.</div>
+              <div id="sortFolderHint" style="font-size:11px; color:var(--accent); opacity:0.85; font-weight:500; white-space:nowrap;"></div>
+            </div>
           </div>
         </div>
 

@@ -317,7 +317,19 @@ function getBestCategory(filename, keywords) {
     }
   }
 
-  return (highestScore > 0 ? bestCategory : null) || "Misc";
+  const category = (highestScore > 0 ? bestCategory : null) || "Misc";
+
+  // Confidence: preset filenames are usually named clearly, so
+  // a prefix code (50pts) should read ~80%, a long word match ~60-70%
+  const SCORE_CAP = 60;
+  let confidence;
+  if (category === "Misc" && highestScore === 0) confidence = 0;
+  else if (highestScore >= 50) confidence = Math.min(100, 85 + Math.round((highestScore - 50) / 5));
+  else if (highestScore >= 25) confidence = 65 + Math.round(((highestScore - 25) / 25) * 20);
+  else if (highestScore >= 10) confidence = 40 + Math.round(((highestScore - 10) / 15) * 25);
+  else confidence = Math.round((highestScore / 10) * 40);
+
+  return { category, score: highestScore, confidence };
 }
 
 async function resolveDuplicate(destPath) {
@@ -336,10 +348,29 @@ async function resolveDuplicate(destPath) {
   }
 }
 
-async function previewSort(sourceDir) {
+async function previewSort(sourceDir, progressCallback = null) {
   const keywords = await getKeywords();
   const results = [];
-  const categoryNames = Object.keys(keywords).filter(k => k !== "_meta");
+  // ── Pass 1: fast count of all preset files (no metadata reads) ──────────────
+  let totalFiles = 0;
+  async function countFiles(dir) {
+    let files;
+    try { files = await fs.readdir(dir); } catch { return; }
+    for (const file of files) {
+      const fullPath = path.join(dir, file);
+      let stat;
+      try { stat = await fs.stat(fullPath); } catch { continue; }
+      if (stat.isDirectory()) {
+        await countFiles(fullPath);
+      } else if (isSupportedExtension(file)) {
+        totalFiles++;
+      }
+    }
+  }
+  await countFiles(sourceDir);
+
+  // ── Pass 2: analyse files and emit progress after each one ──────────────────
+  let processed = 0;
 
   async function scan(dir) {
     let files;
@@ -360,10 +391,9 @@ async function previewSort(sourceDir) {
       }
 
       if (stat.isDirectory()) {
-        if (categoryNames.includes(file)) continue;
         await scan(fullPath);
       } else if (isSupportedExtension(file)) {
-        const category = getBestCategory(file, keywords);
+        const { category, confidence } = getBestCategory(file, keywords);
         const intelligence = detectPresetMetadata(file);
         const pluginName = await readFxpPluginId(fullPath);
 
@@ -371,9 +401,15 @@ async function previewSort(sourceDir) {
           from: fullPath,
           file,
           category,
+          confidence,
           intelligence,
-          pluginName   // e.g. "SERUM", "MASSIVE", or null for non-FXP formats
+          pluginName
         });
+
+        processed++;
+        if (progressCallback && totalFiles > 0) {
+          progressCallback(Math.floor((processed / totalFiles) * 100));
+        }
       }
     }
   }

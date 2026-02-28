@@ -19,11 +19,45 @@ let fullPreviewData = [];
 let filteredPreviewData = [];
 let intelligenceMode = false;
 let isSorting = false;
+let bpmRange = { min: 0, max: 300 }; // BPM slider range
+
+// ================= THEME =================
+let isDarkTheme = true; // default dark
+
+function initTheme() {
+  // Detect system preference
+  const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  isDarkTheme = prefersDark !== false; // default to dark
+  // Check localStorage override
+  const saved = localStorage.getItem("themeOverride");
+  if (saved === "light") isDarkTheme = false;
+  if (saved === "dark") isDarkTheme = true;
+  applyTheme();
+  // Listen for system theme changes
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", e => {
+    if (!localStorage.getItem("themeOverride")) {
+      isDarkTheme = e.matches;
+      applyTheme();
+    }
+  });
+}
+
+function applyTheme() {
+  document.documentElement.setAttribute("data-theme", isDarkTheme ? "dark" : "light");
+  const btn = document.getElementById("themeToggleBtn");
+  if (btn) btn.textContent = isDarkTheme ? "☀️" : "🌙";
+}
+
+function toggleTheme() {
+  isDarkTheme = !isDarkTheme;
+  localStorage.setItem("themeOverride", isDarkTheme ? "dark" : "light");
+  applyTheme();
+}
 
 // ================= APP MODE =================
 // "preset" | "sample"
 let appMode = "preset";
-let sampleIntelligenceMode = false;
+let sampleIntelligenceMode = true; // default ON — most users want metadata detection
 // keyFilter drives both the preview filter AND the sort folder naming
 // Shape: { mode: "all"|"major"|"minor"|"notes", notes: Set<string> }
 let keyFilter = { mode: "all", notes: new Set() };
@@ -111,28 +145,47 @@ function renderKeyFilterBar() {
   noteLabel.textContent = "Notes:";
   bar.appendChild(noteLabel);
 
-  // Collect all unique keys from data, sort them
+  // ── IMPORTANT: collect keys from BPM-filtered data only ──────────────────
+  // We apply the BPM filter manually here (same logic as applyFilter but key-agnostic)
+  // so the note buttons only show keys that exist within the current BPM range.
+  const bpmFilteredData = fullPreviewData.filter(p => {
+    const bpmRaw = parseFloat(p.metadata?.bpm || 0);
+    if (bpmRaw <= 0) return true; // no bpm data — always include for key scanning
+    const bpmInt = Math.round(bpmRaw);
+    return bpmInt >= bpmRange.min && bpmInt <= bpmRange.max;
+  });
+
+  // Collect all unique keys from BPM-filtered data
   const allKeys = [...new Set(
-    fullPreviewData
+    bpmFilteredData
       .map(p => p.metadata?.key)
       .filter(Boolean)
       .map(k => {
-        // Normalise capitalisation: "am" → "Am", "c#m" → "C#m"
         k = k.trim();
         return k[0].toUpperCase() + k.slice(1).toLowerCase();
       })
   )].sort((a, b) => {
-    // Sort: naturals first, then sharps, then flats; major before minor
     const noteOrder = ["C","D","E","F","G","A","B"];
     const baseA = a.replace(/[#bm]/g, "")[0] || a[0];
     const baseB = b.replace(/[#bm]/g, "")[0] || b[0];
     return noteOrder.indexOf(baseA) - noteOrder.indexOf(baseB);
   });
 
+  // Auto-deselect any notes that are no longer in the filtered key set
+  if (keyFilter.mode === "notes" && keyFilter.notes.size > 0) {
+    const allKeySet = new Set(allKeys);
+    for (const n of [...keyFilter.notes]) {
+      if (!allKeySet.has(n)) {
+        keyFilter.notes.delete(n);
+      }
+    }
+    if (keyFilter.notes.size === 0) keyFilter.mode = "all";
+  }
+
   if (allKeys.length === 0) {
     const noKeys = document.createElement("span");
     noKeys.style.cssText = "font-size:11px; color:#555; font-style:italic;";
-    noKeys.textContent = "No key data — enable Intelligence Mode";
+    noKeys.textContent = "No key data in BPM range";
     bar.appendChild(noKeys);
     return;
   }
@@ -143,7 +196,6 @@ function renderKeyFilterBar() {
     btn.className = `key-filter-btn ${isActive ? "active" : ""}`;
     btn.textContent = k;
 
-    // Show what folder name will look like on hover
     const noteSet = new Set(keyFilter.notes);
     if (!isActive) noteSet.add(k); else noteSet.delete(k);
     const previewNotes = [...noteSet].join(", ");
@@ -152,14 +204,11 @@ function renderKeyFilterBar() {
       : `Folders will be named: "Category [${previewNotes}]"`;
 
     btn.onclick = () => {
-      // Switch to notes mode if not already
       if (keyFilter.mode !== "notes") {
         keyFilter = { mode: "notes", notes: new Set() };
       }
-      // Toggle this note
       if (keyFilter.notes.has(k)) {
         keyFilter.notes.delete(k);
-        // If no notes left, fall back to "all"
         if (keyFilter.notes.size === 0) keyFilter.mode = "all";
       } else {
         keyFilter.notes.add(k);
@@ -177,6 +226,95 @@ function renderKeyFilterBar() {
   if (hintEl) updateSortFolderHintEl(hintEl);
 }
 
+// ================= BPM RANGE SLIDER =================
+// ── Commit helpers for the number inputs (called on change/blur/Enter) ──────
+// Using commit-on-finish instead of oninput means typing "112" digit-by-digit
+// doesn't trigger premature clamping. min === max is explicitly allowed so
+// the user can filter to exactly one BPM value.
+function commitBpmMin(raw) {
+  let v = parseInt(raw);
+  if (isNaN(v) || v < 0) v = 0;
+  if (v > 300) v = 300;
+  // Allow min === max (exact BPM filter). Only prevent min > max.
+  if (v > bpmRange.max) { v = bpmRange.max; }
+  bpmRange.min = v;
+  const minInput = document.getElementById("bpmMinInput");
+  const minSlider = document.getElementById("bpmMin");
+  if (minInput) minInput.value = v;
+  if (minSlider) minSlider.value = v;
+  updateBpmRangeDisplay();
+  applyFilter();
+}
+
+function commitBpmMax(raw) {
+  let v = parseInt(raw);
+  if (isNaN(v) || v < 0) v = 0;
+  if (v > 300) v = 300;
+  // Allow min === max. Only prevent max < min.
+  if (v < bpmRange.min) { v = bpmRange.min; }
+  bpmRange.max = v;
+  const maxInput = document.getElementById("bpmMaxInput");
+  const maxSlider = document.getElementById("bpmMax");
+  if (maxInput) maxInput.value = v;
+  if (maxSlider) maxSlider.value = v;
+  updateBpmRangeDisplay();
+  applyFilter();
+}
+
+function resetBpmSlider() {
+  bpmRange = { min: 0, max: 300 };
+  ["bpmMin","bpmMax","bpmMinInput","bpmMaxInput"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = id.includes("Max") ? 300 : 0;
+  });
+  updateBpmRangeDisplay();
+  const cont = document.getElementById("bpmSliderContainer");
+  if (cont) cont.style.display = "none";
+}
+
+function updateBpmRangeDisplay() {
+  const minEl = document.getElementById("bpmMinVal");
+  const maxEl = document.getElementById("bpmMaxVal");
+  const trackFill = document.getElementById("bpmTrackFill");
+  const minInput = document.getElementById("bpmMinInput");
+  const maxInput = document.getElementById("bpmMaxInput");
+
+  if (minEl) minEl.textContent = bpmRange.min;
+  if (maxEl) maxEl.textContent = bpmRange.max >= 300 ? "300+" : bpmRange.max;
+  if (minInput && document.activeElement !== minInput) minInput.value = bpmRange.min;
+  if (maxInput && document.activeElement !== maxInput) maxInput.value = bpmRange.max;
+
+  if (trackFill) {
+    const pctMin = (bpmRange.min / 300) * 100;
+    const pctMax = (bpmRange.max / 300) * 100;
+    trackFill.style.left = pctMin + "%";
+    // When min === max show a small 4px dot so the track doesn't disappear
+    const width = pctMax - pctMin;
+    trackFill.style.width = width === 0 ? "4px" : width + "%";
+  }
+
+  // Always update the folder hint when BPM changes
+  updateSortFolderHint();
+}
+
+function renderBpmSlider() {
+  const container = document.getElementById("bpmSliderContainer");
+  if (!container) return;
+
+  // Check if any items have BPM data
+  const hasBpm = fullPreviewData.some(p =>
+    parseFloat(appMode === "sample" ? p.metadata?.bpm : p.intelligence?.bpm) > 0
+  );
+
+  if (!hasBpm || !fullPreviewData.length) {
+    container.style.display = "none";
+    return;
+  }
+
+  container.style.display = "block";
+  updateBpmRangeDisplay();
+}
+
 // Shows a small hint text near the status bar describing the active key filter
 function updateSortFolderHint() {
   const hintEl = document.getElementById("sortFolderHint");
@@ -185,23 +323,9 @@ function updateSortFolderHint() {
 }
 
 function updateSortFolderHintEl(el) {
-  if (appMode !== "sample" || keyFilter.mode === "all") {
-    el.textContent = "";
-    return;
-  }
-
-  let label = "";
-  if      (keyFilter.mode === "major") label = "Major";
-  else if (keyFilter.mode === "minor") label = "Minor";
-  else if (keyFilter.mode === "notes" && keyFilter.notes.size > 0)
-    label = [...keyFilter.notes].join(", ");
-
-  if (!label) { el.textContent = ""; return; }
-
-  const folderBase = currentFolder
-    ? currentFolder.split(/[\\/]/).pop()
-    : "Sorted";
-  el.textContent = `↳ ${folderBase} [${label}]  →  Category  →  files`;
+  if (!currentFolder || !fullPreviewData.length) { el.textContent = ""; return; }
+  const rootName = getSortRootPreviewName();
+  el.textContent = `↳ Output: ${rootName}  /  Category  /  files`;
 }
 
 // ================= SYNTH TAG MAPPING =================
@@ -455,7 +579,7 @@ function showEmptyState(message = "Ready") {
 }
 
 // ================= SORTED STATE =================
-function showSortedState(sortedCount) {
+function showSortedState(sortedCount, newFolders) {
   clearPreviewInteractivity();
   previewDiv.innerHTML = "";
 
@@ -466,7 +590,8 @@ function showSortedState(sortedCount) {
   wrapper.style.justifyContent = "center";
   wrapper.style.height = "100%";
   wrapper.style.textAlign = "center";
-  wrapper.style.opacity = "0.9";
+  wrapper.style.overflow = "auto";
+  wrapper.style.padding = "20px";
 
   const icon = document.createElement("div");
   icon.textContent = "✅";
@@ -484,21 +609,76 @@ function showSortedState(sortedCount) {
   subtitle.style.marginTop = "6px";
   subtitle.textContent = "You can now review the sorted folders.";
 
-  const button = document.createElement("button");
-  button.textContent = "Open Sorted Folder";
-  button.style.marginTop = "16px";
-  button.onclick = () => window.api.openFolder(currentFolder);
-
-  const newSessionBtn = document.createElement("button");
-  newSessionBtn.textContent = "Start New Session";
-  newSessionBtn.style.marginTop = "10px";
-  newSessionBtn.onclick = () => resetSession();
-
   wrapper.appendChild(icon);
   wrapper.appendChild(title);
   wrapper.appendChild(subtitle);
-  wrapper.appendChild(button);
-  wrapper.appendChild(newSessionBtn);
+
+  // New folders list with NEW badges
+  if (newFolders && newFolders.length > 0) {
+    const foldersLabel = document.createElement("div");
+    foldersLabel.style.cssText = "margin-top:18px; margin-bottom:8px; font-size:12px; font-weight:600; color:var(--lavender); opacity:0.8; text-align:center;";
+    foldersLabel.textContent = "Created Folders:";
+    wrapper.appendChild(foldersLabel);
+
+    const foldersList = document.createElement("div");
+    foldersList.style.cssText = "display:flex; flex-wrap:wrap; gap:6px; justify-content:center; max-width:500px;";
+    newFolders.forEach(folderPath => {
+      const name = folderPath.split(/[/\\]/).pop();
+      const chip = document.createElement("div");
+      chip.style.cssText = `
+        display:inline-flex; align-items:center; gap:6px;
+        background:rgba(148,0,211,0.12); border:1px solid rgba(148,0,211,0.35);
+        border-radius:8px; padding:4px 10px; font-size:12px;
+      `;
+      const folderIcon = document.createElement("span");
+      folderIcon.textContent = "📁";
+      const nameSpan = document.createElement("span");
+      nameSpan.textContent = name;
+      nameSpan.style.color = "var(--lavender)";
+      const newBadge = document.createElement("span");
+      newBadge.textContent = "NEW";
+      newBadge.style.cssText = `
+        display:inline-block; padding:1px 5px; font-size:9px; font-weight:700;
+        border-radius:3px; background:rgba(0,200,100,0.2); color:#30e870;
+        border:1px solid rgba(0,200,100,0.4); letter-spacing:0.05em;
+      `;
+      chip.appendChild(folderIcon);
+      chip.appendChild(nameSpan);
+      chip.appendChild(newBadge);
+      foldersList.appendChild(chip);
+    });
+    wrapper.appendChild(foldersList);
+  }
+
+  // Determine the sort root — it's the NEW_* folder (shortest path = top-level parent)
+  const sortRootFolder = (newFolders && newFolders.length > 0)
+    ? newFolders.reduce((shortest, p) => p.length < shortest.length ? p : shortest)
+    : currentFolder;
+
+  // Action buttons row
+  const btnRow = document.createElement("div");
+  btnRow.style.cssText = "display:flex; gap:10px; margin-top:20px; flex-wrap:wrap; justify-content:center;";
+
+  const button = document.createElement("button");
+  button.textContent = "Open Sorted Folder";
+  button.onclick = () => window.api.openFolder(sortRootFolder);
+
+  const undoBtn = document.createElement("button");
+  undoBtn.textContent = "↩ Undo";
+  undoBtn.style.background = "#333";
+  undoBtn.style.color = "#ccc";
+  undoBtn.onclick = () => showUndoConfirm();
+
+  const newSessionBtn = document.createElement("button");
+  newSessionBtn.textContent = "Start New Session";
+  newSessionBtn.style.background = "rgba(255,255,255,0.08)";
+  newSessionBtn.style.color = "#ccc";
+  newSessionBtn.onclick = () => resetSession();
+
+  btnRow.appendChild(button);
+  btnRow.appendChild(undoBtn);
+  btnRow.appendChild(newSessionBtn);
+  wrapper.appendChild(btnRow);
   previewDiv.appendChild(wrapper);
 
   statusText.innerText = `Sorted ${sortedCount} presets.`;
@@ -515,6 +695,7 @@ document.getElementById("intelligenceToggle")
 initUI();
 
 async function initUI() {
+  initTheme();
   const keywords = await window.api.getKeywords();
   renderCategoryToggles(keywords);
   renderKeywordEditor(keywords);
@@ -522,6 +703,10 @@ async function initUI() {
   const sampleKeywords = await window.api.getSampleKeywords();
   renderSampleCategoryToggles(sampleKeywords);
   renderSampleKeywordEditor(sampleKeywords);
+
+  // Default intelligence mode ON for samples
+  const sampleIntelToggle = document.getElementById("sampleIntelligenceToggle");
+  if (sampleIntelToggle) sampleIntelToggle.checked = true;
 
   showEmptyState();
 }
@@ -859,6 +1044,8 @@ async function runPreview(folder) {
   filteredPreviewData = [...fullPreviewData];
   statusText.innerText = `${fullPreviewData.length} ${appMode === "sample" ? "samples" : "presets"} detected. Review before sorting.`;
   keyFilter = { mode: "all", notes: new Set() };
+  resetBpmSlider();
+  renderBpmSlider();
   renderKeyFilterBar();
   renderPreview();
 }
@@ -878,6 +1065,17 @@ function applyFilter() {
     ? []
     : fullPreviewData.filter(item => {
         if (!enabled.includes(item.category)) return false;
+
+        // BPM range filter (works for both modes if bpm data available)
+        // Round to integer — BPM metadata is often stored as float (e.g. 112.9)
+        // and we want "112 BPM" displayed files to match a 112–112 range exactly.
+        const bpmRaw = parseFloat(
+          (appMode === "sample" ? item.metadata?.bpm : item.intelligence?.bpm) || 0
+        );
+        if (bpmRaw > 0) {
+          const bpmInt = Math.round(bpmRaw);
+          if (bpmInt < bpmRange.min || bpmInt > bpmRange.max) return false;
+        }
 
         // Key filter (sample mode only, skip if mode is "all")
         if (appMode === "sample" && keyFilter.mode !== "all") {
@@ -911,13 +1109,25 @@ function applyFilter() {
         return true;
       });
 
+  // After BPM filter changes, refresh the key buttons to show only keys within range
+  if (appMode === "sample") renderKeyFilterBar();
   renderPreview();
 }
 
 // ================= UNDO STATE =================
-function showUndoState(restoredCount) {
+function showUndoState(restoredCount, sourceFolder) {
   clearPreviewInteractivity();
   previewDiv.innerHTML = "";
+
+  // Reset all key/metadata state so UI is clean
+  fullPreviewData = [];
+  filteredPreviewData = [];
+  const bar = document.getElementById("keyFilterBar");
+  if (bar) bar.style.display = "none";
+  const hint = document.getElementById("sortFolderHint");
+  if (hint) hint.textContent = "";
+  keyFilter = { mode: "all", notes: new Set() };
+  resetBpmSlider();
 
   const wrapper = document.createElement("div");
   wrapper.style.display = "flex";
@@ -936,32 +1146,37 @@ function showUndoState(restoredCount) {
   const title = document.createElement("div");
   title.style.fontWeight = "700";
   title.style.fontSize = "18px";
-  title.textContent = `Undo restored ${restoredCount} presets`;
+  title.textContent = `Undo restored ${restoredCount} files`;
 
   const subtitle = document.createElement("div");
   subtitle.style.fontSize = "13px";
   subtitle.style.opacity = "0.6";
   subtitle.style.marginTop = "6px";
-  subtitle.textContent = "Your original folder structure has been restored.";
+  subtitle.textContent = "Your original folder structure has been restored. Empty sort folders were removed.";
+
+  const btnRow = document.createElement("div");
+  btnRow.style.cssText = "display:flex; gap:10px; margin-top:16px; flex-wrap:wrap; justify-content:center;";
 
   const openBtn = document.createElement("button");
   openBtn.textContent = "Open Restored Folder";
-  openBtn.style.marginTop = "16px";
-  openBtn.onclick = () => window.api.openFolder(currentFolder);
+  openBtn.onclick = () => window.api.openFolder(sourceFolder || currentFolder);
 
   const newSessionBtn = document.createElement("button");
   newSessionBtn.textContent = "Start New Session";
-  newSessionBtn.style.marginTop = "10px";
+  newSessionBtn.style.background = "rgba(255,255,255,0.08)";
+  newSessionBtn.style.color = "#ccc";
   newSessionBtn.onclick = () => resetSession();
+
+  btnRow.appendChild(openBtn);
+  btnRow.appendChild(newSessionBtn);
 
   wrapper.appendChild(icon);
   wrapper.appendChild(title);
   wrapper.appendChild(subtitle);
-  wrapper.appendChild(openBtn);
-  wrapper.appendChild(newSessionBtn);
+  wrapper.appendChild(btnRow);
   previewDiv.appendChild(wrapper);
 
-  statusText.innerText = `Undo restored ${restoredCount} presets.`;
+  statusText.innerText = `Undo restored ${restoredCount} files.`;
 }
 
 // ================= PREVIEW =================
@@ -994,6 +1209,15 @@ function buildConfidenceBadge(confidence) {
 function buildSampleTagsWrap(preset) {
   const wrap = document.createElement("span");
   wrap.style.cssText = "display:inline-flex; align-items:center; gap:3px; flex-shrink:0;";
+
+  // Duplicate warning badge (highest priority — very visible)
+  if (preset.isDuplicate) {
+    const dupBadge = document.createElement("span");
+    dupBadge.className = "duplicate-badge";
+    dupBadge.textContent = "⚠ DUP";
+    dupBadge.title = "Duplicate filename detected in this folder";
+    wrap.appendChild(dupBadge);
+  }
 
   // Confidence badge — first, most prominent
   const confBadge = buildConfidenceBadge(preset.confidence);
@@ -1041,27 +1265,36 @@ function buildSampleTagsWrap(preset) {
 }
 
 
-// Returns the folder display path shown in preview.
-// When a key filter is active the structure is:
-//   SourceFolderName [Am] / Category
-// so the user sees exactly what will be created on disk.
+// Builds preview name for the sort root folder (mirrors the backend buildSortRootName logic)
+function getSortRootPreviewName() {
+  const baseName = currentFolder ? currentFolder.split(/[/\\]/).pop() : "Folder";
+  const parts = [`NEW_${baseName}`];
+
+  // Key suffix
+  if (keyFilter.mode !== "all") {
+    if (keyFilter.mode === "major") {
+      parts.push("Major");
+    } else if (keyFilter.mode === "minor") {
+      parts.push("Minor");
+    } else if (keyFilter.mode === "notes" && keyFilter.notes.size > 0) {
+      const noteStr = [...keyFilter.notes].map(n => n.replace(/[^a-zA-Z0-9#b]/g,"")).join("_");
+      if (noteStr) parts.push(noteStr);
+    }
+  }
+
+  // BPM suffix
+  const min = Math.round(bpmRange.min || 0);
+  const max = Math.round(bpmRange.max ?? 300);
+  if (min > 0 || max < 300) {
+    parts.push(min === max ? `${min}BPM` : `${min}-${max}BPM`);
+  }
+
+  return parts.join("_");
+}
+
+// Returns the folder display path shown in preview — always NEW_xxx / Category
 function getDisplayFolderName(category) {
-  if (appMode !== "sample" || keyFilter.mode === "all") return category;
-
-  let label = "";
-  if      (keyFilter.mode === "major") label = "Major";
-  else if (keyFilter.mode === "minor") label = "Minor";
-  else if (keyFilter.mode === "notes" && keyFilter.notes.size > 0)
-    label = [...keyFilter.notes].join(", ");
-
-  if (!label) return category;
-
-  // Show as  "FolderName [Am]  /  Category"  so it reads like a path
-  const parentName = currentFolder
-    ? `${currentFolder.split(/[\\/]/).pop()} [${label}]`
-    : `Sorted [${label}]`;
-
-  return `${parentName}  /  ${category}`;
+  return `${getSortRootPreviewName()}  /  ${category}`;
 }
 
 function renderPreview() {
@@ -1082,7 +1315,7 @@ function renderPreview() {
   const controls = document.createElement("div");
   controls.className = "view-controls";
 
-  // Left: Expand / Collapse (hidden in columns view)
+  // Left: Expand / Collapse (hidden in columns view) + duplicate warning
   const leftBtns = document.createElement("div");
   leftBtns.className = "view-controls-left";
 
@@ -1096,6 +1329,21 @@ function renderPreview() {
 
   leftBtns.appendChild(expandBtn);
   leftBtns.appendChild(collapseBtn);
+
+  // Duplicate count warning
+  const dupCount = filteredPreviewData.filter(p => p.isDuplicate).length;
+  if (dupCount > 0) {
+    const dupWarn = document.createElement("span");
+    dupWarn.style.cssText = `
+      display:inline-flex; align-items:center; gap:4px;
+      padding:3px 9px; border-radius:6px; font-size:11px; font-weight:600;
+      background:rgba(255,165,0,0.15); color:#ffaa33;
+      border:1px solid rgba(255,165,0,0.35);
+    `;
+    dupWarn.title = "These files have the same name as another file in the scan. They will be renamed with a (1), (2) suffix to avoid overwrites.";
+    dupWarn.innerHTML = `⚠ ${dupCount} duplicate${dupCount > 1 ? "s" : ""}`;
+    leftBtns.appendChild(dupWarn);
+  }
 
   // Right: view switcher icons
   const rightBtns = document.createElement("div");
@@ -1201,6 +1449,13 @@ function renderPreview() {
         } else {
           const tagsWrap = document.createElement("span");
           tagsWrap.style.cssText = "display:inline-flex; align-items:center; gap:3px; flex-shrink:0;";
+          if (preset.isDuplicate) {
+            const dupBadge = document.createElement("span");
+            dupBadge.className = "duplicate-badge";
+            dupBadge.textContent = "⚠ DUP";
+            dupBadge.title = "Duplicate filename detected";
+            tagsWrap.appendChild(dupBadge);
+          }
           const confP = buildConfidenceBadge(preset.confidence);
           if (confP) tagsWrap.appendChild(confP);
           const tagEl = createSynthTagEl(preset);
@@ -1271,6 +1526,12 @@ function renderPreview() {
           tagsWrap.style.cssText = "display:flex; flex-wrap:wrap; gap:3px; align-items:center;";
           chip.appendChild(tagsWrap);
         } else {
+          if (preset.isDuplicate) {
+            const dupBadge = document.createElement("span");
+            dupBadge.className = "duplicate-badge";
+            dupBadge.textContent = "⚠ DUP";
+            chip.appendChild(dupBadge);
+          }
           const confG = buildConfidenceBadge(preset.confidence);
           if (confG) { confG.style.marginLeft = "0"; chip.appendChild(confG); }
           const tagEl = createSynthTagEl(preset);
@@ -1345,6 +1606,12 @@ function renderPreview() {
           row.appendChild(nameSpan);
           const colTagsC = document.createElement("span");
           colTagsC.style.cssText = "display:inline-flex; align-items:center; gap:3px; flex-shrink:0;";
+          if (preset.isDuplicate) {
+            const dupBadge = document.createElement("span");
+            dupBadge.className = "duplicate-badge";
+            dupBadge.textContent = "⚠ DUP";
+            colTagsC.appendChild(dupBadge);
+          }
           const confC = buildConfidenceBadge(preset.confidence);
           if (confC) colTagsC.appendChild(confC);
           const tagEl = createSynthTagEl(preset);
@@ -1397,24 +1664,61 @@ async function startSort() {
   window.api.onProgress(val => { progressFill.style.width = val + "%"; });
 
   try {
-    let count;
+    let result;
     if (appMode === "sample") {
-      count = await window.api.sampleExecute(currentFolder, filteredPreviewData, {
-        mode: keyFilter.mode,
-        notes: [...keyFilter.notes]
-      });
+      result = await window.api.sampleExecute(
+        currentFolder,
+        filteredPreviewData,
+        { mode: keyFilter.mode, notes: [...keyFilter.notes] },
+        { min: bpmRange.min, max: bpmRange.max }
+      );
     } else {
-      count = await window.api.execute(currentFolder, filteredPreviewData);
+      result = await window.api.execute(
+        currentFolder,
+        filteredPreviewData,
+        { mode: keyFilter.mode, notes: [...keyFilter.notes] },
+        { min: bpmRange.min, max: bpmRange.max }
+      );
     }
+    // Handle both old (number) and new ({ count, newFolders }) return format
+    const count = (typeof result === "object") ? result.count : result;
+    const newFolders = (typeof result === "object") ? result.newFolders : [];
     isSorting = false;
     progressFill.style.width = "100%";
-    showSortedState(count);
+    showSortedState(count, newFolders);
   } catch (err) {
     console.error("Sort failed:", err);
     isSorting = false;
     progressFill.style.width = "0%";
     statusText.innerText = "Sort failed. Please try again.";
   }
+}
+
+// ================= UNDO CONFIRM DIALOG =================
+function showUndoConfirm() {
+  const overlay = document.getElementById("undoConfirmOverlay");
+  if (overlay) {
+    overlay.classList.add("visible");
+    // Close on backdrop click
+    overlay.onclick = (e) => { if (e.target === overlay) closeUndoConfirm(); };
+    // Close on Escape key
+    document._undoEscHandler = (e) => { if (e.key === "Escape") closeUndoConfirm(); };
+    document.addEventListener("keydown", document._undoEscHandler);
+  }
+}
+
+function closeUndoConfirm() {
+  const overlay = document.getElementById("undoConfirmOverlay");
+  if (overlay) overlay.classList.remove("visible");
+  if (document._undoEscHandler) {
+    document.removeEventListener("keydown", document._undoEscHandler);
+    delete document._undoEscHandler;
+  }
+}
+
+function confirmUndo() {
+  closeUndoConfirm();
+  undo();
 }
 
 // ================= UNDO =================
@@ -1429,11 +1733,9 @@ async function undo() {
 
   if (count === 0) { showEmptyState("Nothing to undo."); return; }
 
-  fullPreviewData    = [];
-  filteredPreviewData = [];
   progressFill.style.width = "0%";
   currentFolder = sourceFolder;
-  showUndoState(count);
+  showUndoState(count, sourceFolder);
 }
 
 // ================= RESET SESSION =================
@@ -1443,9 +1745,13 @@ function resetSession() {
   filteredPreviewData = [];
   isSorting = false;
   keyFilter = { mode: "all", notes: new Set() };
+  bpmRange = { min: 0, max: 300 };
   progressFill.style.width = "0%";
   const bar = document.getElementById("keyFilterBar");
   if (bar) bar.style.display = "none";
+  const hint = document.getElementById("sortFolderHint");
+  if (hint) hint.textContent = "";
+  resetBpmSlider();
   showEmptyState("Select a folder to sort.");
 }
 

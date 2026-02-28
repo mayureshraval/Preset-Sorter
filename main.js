@@ -121,11 +121,13 @@ ipcMain.handle("preview-sort", async (event, folderPath) => {
   );
 });
 
-ipcMain.handle("execute-sort", (event, folderPath, previewData) => {
+ipcMain.handle("execute-sort", (event, folderPath, previewData, keyFilter, bpmRange) => {
   return sorter.executeSort(
     folderPath,
     previewData,
-    (progress) => mainWindow.webContents.send("sort-progress", progress)
+    (progress) => mainWindow.webContents.send("sort-progress", progress),
+    keyFilter || null,
+    bpmRange  || null
   );
 });
 
@@ -143,11 +145,12 @@ ipcMain.handle("preview-sample-sort", async (_, folderPath, intelligenceMode) =>
   );
 });
 
-ipcMain.handle("execute-sample-sort", (_, folderPath, previewData, keyFilter) => {
+ipcMain.handle("execute-sample-sort", (_, folderPath, previewData, keyFilter, bpmRange) => {
   return sampleSorter.executeSampleSort(
     folderPath,
     previewData,
     (progress) => mainWindow.webContents.send("sort-progress", progress),
-    keyFilter || null
+    keyFilter || null,
+    bpmRange  || null
   );
 });

@@ -1,7 +1,7 @@
 {
   "name": "preset-sorter-pro",
   "productName": "Preset Sorter Pro",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Professional preset sorting tool",
   "author": "Mayuresh Rawal",
 
@@ -24,10 +24,12 @@
       "preload.js",
       "sorter.js",
       "intelligence.js",
+      "sample-sorter.js",
       "renderer.js",
       "index.html",
       "about.html",
       "keywords.json",
+      "sample-keywords.json",
       "config.json",
       "assets/**/*",
       "package.json",

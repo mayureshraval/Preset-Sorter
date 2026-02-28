@@ -1,0 +1,635 @@
+{
+  "_meta": {
+    "protected": [
+      "Kick", "Snare", "HiHat", "Clap", "Snap",
+      "Tom", "Cymbal", "Percussion",
+      "Acoustic Drums", "Orchestral Drums", "Drum Enhancer",
+      "Drum Loop", "Fills",
+      "Bass Loop", "Synth Loop", "Synth Arp",
+      "Melody Loop", "Chord Loop",
+      "Stab", "Sub Drop", "Riser",
+      "FX", "Glitch", "Impact", "Sweep", "White Noise",
+      "Vinyl Scratch", "Video Game FX", "Animal Sound",
+      "Vocal", "Vocal Adlib", "Vocal Loop", "Vocal Shout",
+      "Live Instruments", "World Sounds",
+      "Song Starter", "Foley", "Ambience",
+      "One Shot", "MIDI", "Full Mix", "Misc"
+    ]
+  },
+
+  "Kick": {
+    "default": [
+      "kick", "kik", "bd", "bass drum", "bassdrum",
+      "kick drum", "808 kick", "sub kick", "punchy kick",
+      "deep kick", "hard kick", "soft kick", "vinyl kick",
+      "acoustic kick", "processed kick", "distorted kick",
+      "layered kick", "transient kick", "thump", "boom",
+      "kd", "kick_", "_kick", "kick1", "kick2", "kick3",
+      "orchestral kick", "hybrid kick", "electronic kick",
+      "big kick", "tight kick", "trap kick", "house kick",
+      "techno kick", "psy kick", "kshmr kick"
+    ],
+    "custom": []
+  },
+
+  "Snare": {
+    "default": [
+      "snare", "snr", "sd", "snare drum", "rimshot",
+      "rim", "cross stick", "crossstick",
+      "acoustic snare", "electronic snare", "vinyl snare",
+      "tight snare", "fat snare", "crack",
+      "layered snare", "pitched snare", "ghost snare",
+      "snare roll", "flam", "brush snare",
+      "snr1", "snr2",
+      "orchestral snare", "hybrid snare", "trap snare",
+      "crispy snare", "dry snare", "wet snare",
+      "reverb snare", "compressed snare", "kshmr snare"
+    ],
+    "custom": []
+  },
+
+  "HiHat": {
+    "default": [
+      "hihat", "hi-hat", "hi hat", "hh", "hat",
+      "open hat", "closed hat", "openhat", "closedhat",
+      "pedal hat", "ride", "ride cymbal",
+      "crash", "stack", "china cymbal",
+      "splash", "ohat", "chat", "ohh", "chh",
+      "overhead", "hi-hat roll",
+      "tight hat", "loose hat",
+      "china", "sizzle", "bell cymbal",
+      "vintage cymbal", "acoustic cymbal", "electronic cymbal"
+    ],
+    "custom": []
+  },
+
+  "Clap": {
+    "default": [
+      "clap", "clp", "handclap", "hand clap",
+      "layered clap", "tight clap", "reverb clap", "dry clap",
+      "acoustic clap", "electronic clap", "vinyl clap",
+      "909 clap", "808 clap", "trap clap",
+      "processed clap", "big clap", "fat clap",
+      "kshmr clap", "organic clap", "clap roll"
+    ],
+    "custom": []
+  },
+
+  "Snap": {
+    "default": [
+      "snap", "finger snap", "snp",
+      "snap_", "_snap", "snap1", "snap2",
+      "wood snap", "tight snap", "dry snap",
+      "soft snap", "crispy snap", "kshmr snap",
+      "knuckle", "click snap", "finger"
+    ],
+    "custom": []
+  },
+
+  "Tom": {
+    "default": [
+      "tom", "toms", "floor tom", "rack tom", "high tom",
+      "mid tom", "low tom", "tom fill", "tom roll",
+      "acoustic tom", "electronic tom", "processed tom",
+      "orchestral tom", "tribal tom", "taiko",
+      "tom hit", "tom_", "_tom", "tom1", "tom2",
+      "timpani", "marching tom", "snare tom",
+      "kettle drum", "tom drum"
+    ],
+    "custom": []
+  },
+
+  "Cymbal": {
+    "default": [
+      "cymbal", "cymbals", "crash cymbal", "ride cymbal",
+      "china cymbal", "splash cymbal", "stack cymbal",
+      "orchestral cymbal", "sizzle cymbal", "bell",
+      "vintage cymbal", "acoustic cymbal",
+      "crash", "splash", "cym_", "_cym", "effect cymbal"
+    ],
+    "custom": []
+  },
+
+  "Percussion": {
+    "default": [
+      "perc", "percussion", "conga", "bongo",
+      "timbale", "cowbell", "agogo",
+      "tamb", "tambourine", "maracas", "cabasa",
+      "guiro", "woodblock", "claves", "triangle",
+      "castanets", "djembe", "darbuka", "doumbek",
+      "cajon", "tabla", "shaker",
+      "rim perc", "ethnic perc", "latin perc",
+      "afro perc", "tribal", "tick",
+      "prc", "hand drum", "frame drum",
+      "beatbox perc", "body perc", "finger drum",
+      "udu", "pandeiro", "berimbau", "repique",
+      "beatboxing", "beatbox", "mouth percussion",
+      "human beatbox", "vocal perc", "body beat"
+    ],
+    "custom": []
+  },
+
+  "Acoustic Drums": {
+    "default": [
+      "acoustic drum", "acoustic kit", "live drum", "real drum",
+      "drum room", "overhead mic", "brush drum", "jazz drum",
+      "vintage drum", "studio drum", "live kit", "organic drum",
+      "acoustic_drum", "live_drum",
+      "wood drum", "natural drum", "recorded drum",
+      "full kit acoustic", "rock drum", "pop drum",
+      "acoustic drums", "kshmr acoustic"
+    ],
+    "custom": []
+  },
+
+  "Orchestral Drums": {
+    "default": [
+      "orchestral drum", "orchestral", "cinematic drum",
+      "taiko", "epic drum", "timpani", "kettle drum",
+      "war drum", "battle drum", "march drum",
+      "film drum", "score drum", "dramatic drum",
+      "trailer drum", "orchestral hit", "concert drum",
+      "symphonic", "marching band", "orchestral perc",
+      "classical drum", "epic perc", "massive drum",
+      "orchestral drums", "kshmr orchestral"
+    ],
+    "custom": []
+  },
+
+  "Drum Enhancer": {
+    "default": [
+      "enhancer", "drum enhancer", "transient", "layer",
+      "sub enhancer", "punch", "parallel",
+      "drum layer", "click layer", "tick layer",
+      "attack enhancer", "body enhancer", "tail",
+      "drum add", "top layer", "noise burst",
+      "transient shaper", "sub layer", "drum texture",
+      "dirt", "grit layer", "drum color",
+      "drum enhancers", "kshmr enhancer"
+    ],
+    "custom": []
+  },
+
+  "Drum Loop": {
+    "default": [
+      "drum loop", "drumloop", "beat", "groove",
+      "full kit", "full beat", "break", "breakbeat",
+      "amen", "think break",
+      "hip hop drums", "trap beat", "house beat",
+      "techno beat", "dnb beat", "jungle beat",
+      "funk groove", "soul beat",
+      "drum break", "loop beat", "drum_loop",
+      "full loop", "solo loop", "drum loops full",
+      "drum loops solo", "live drums loop",
+      "bounce", "swing beat", "shuffled beat",
+      "drum pattern", "rhythm loop", "beat loop",
+      "drum loops", "kshmr drum loop"
+    ],
+    "custom": []
+  },
+
+  "Fills": {
+    "default": [
+      "fill", "fills", "drum fill", "transition fill",
+      "acoustic fill", "instrumental fill", "long fill",
+      "orchestral fill", "short fill", "signature fill",
+      "synth fill", "tom fill", "vocal fill",
+      "break fill", "roll", "end fill", "turnaround",
+      "snare fill", "perc fill", "build fill",
+      "fill_", "_fill", "fill1", "fill2",
+      "intro fill", "outro fill", "loop fill",
+      "climax fill", "drum roll fill", "crash fill",
+      "kshmr fill", "transition drum"
+    ],
+    "custom": []
+  },
+
+  "Bass Loop": {
+    "default": [
+      "bass loop", "bassloop", "bass line", "bassline",
+      "sub loop", "808 loop", "bass groove",
+      "walking bass", "pluck bass loop", "synth bass loop",
+      "electric bass loop", "slap bass loop",
+      "bass riff", "bass phrase", "bass pattern",
+      "low loop", "deep loop", "bass_loop",
+      "bass psy trance", "psy bass", "psytrance bass",
+      "acid bass", "rave bass", "wobble",
+      "reese bass loop", "sub bass loop",
+      "bass sequence", "kshmr bass loop"
+    ],
+    "custom": []
+  },
+
+  "Melody Loop": {
+    "default": [
+      "melody", "melodic", "melody loop", "melodic loop",
+      "lead loop", "topline", "hook", "riff",
+      "piano loop", "keys loop",
+      "guitar loop", "flute loop", "strings loop",
+      "phrase", "lick", "motif", "musical phrase",
+      "solo loop", "instrument loop", "melody line",
+      "action loop", "ethnic instrument loop",
+      "live instrument loop",
+      "sitar loop", "oud loop", "duduk loop",
+      "sarod loop", "koto loop", "shamisen loop",
+      "kshmr melody"
+    ],
+    "custom": []
+  },
+
+  "Chord Loop": {
+    "default": [
+      "chord", "chords", "chord loop", "chord progression",
+      "pad loop", "progression", "harmony", "harmonic",
+      "piano chords", "organ chords", "guitar chords",
+      "synth chords", "comping", "voicing",
+      "maj chord", "min chord", "chord_loop",
+      "stem", "arrangement", "kshmr chord"
+    ],
+    "custom": []
+  },
+
+  "Synth Loop": {
+    "default": [
+      "synth loop", "synthloop", "synth_loop",
+      "synth loops", "kshmr synth loop",
+      "lead synth loop", "synth phrase",
+      "sequence loop", "saw loop",
+      "pluck loop", "super saw loop",
+      "trance loop", "psy loop", "edm loop",
+      "synth line", "synth riff", "synth pattern",
+      "lead loop"
+    ],
+    "custom": []
+  },
+
+  "Synth Arp": {
+    "default": [
+      "arp", "arps", "arpeggio", "synth arp", "synth arps",
+      "arp loop", "arpeggio loop", "arp sequence",
+      "arp pattern", "trance arp", "psy arp",
+      "edm arp", "pluck arp", "staccato arp",
+      "fast arp", "slow arp", "rhythmic arp",
+      "arp_", "_arp", "arp1", "arp2",
+      "sequenced", "sequence", "note sequence",
+      "running notes", "gated arp", "kshmr arp"
+    ],
+    "custom": []
+  },
+
+  "Stab": {
+    "default": [
+      "stab", "stabs", "chord stab", "synth stab",
+      "brass stab", "orch stab", "orchestral stab",
+      "piano stab", "short stab", "punchy stab",
+      "synth shot", "synth shots",
+      "bass shot", "bass shots", "one hit",
+      "kshmr stab", "impact stab", "power chord",
+      "stab_", "_stab", "stab1", "stab2",
+      "horn stab", "string stab", "pad stab"
+    ],
+    "custom": []
+  },
+
+  "Sub Drop": {
+    "default": [
+      "sub drop", "subdrop", "sub_drop",
+      "drop", "bass drop", "808 drop",
+      "sub fall", "falling sub", "downer",
+      "downlifter", "sub sweep", "bass sweep down",
+      "low drop", "deep drop", "sub downer",
+      "drop fx", "sub fx", "fall",
+      "sub drops", "kshmr sub drop"
+    ],
+    "custom": []
+  },
+
+  "Riser": {
+    "default": [
+      "riser", "risers", "uplifter", "up lifter",
+      "rise", "build", "buildup", "build up",
+      "sweep up", "white noise riser",
+      "synth riser", "noise sweep", "tension riser",
+      "snare riser", "drum riser", "sweep riser",
+      "transition riser", "power riser",
+      "riser_", "_riser", "riser1", "riser2",
+      "swell", "crescendo", "impact riser",
+      "kshmr riser", "transition"
+    ],
+    "custom": []
+  },
+
+  "FX": {
+    "default": [
+      "fx", "sfx", "effect", "whoosh",
+      "transition", "reverse",
+      "zap", "laser", "sci fi", "scifi", "tail",
+      "cinematic hit", "atmosphere fx",
+      "industrial", "noise burst", "shock",
+      "static burst", "war horn", "horn alarm", "alarm",
+      "siren", "malfunction", "artifact"
+    ],
+    "custom": []
+  },
+
+  "Glitch": {
+    "default": [
+      "glitch", "glitches", "stutter", "digital",
+      "artifact", "corrupt", "error", "malfunction",
+      "bit crush", "bitcrush", "digital noise",
+      "industrial", "mechanical", "robot fx",
+      "electric zap", "computer", "data",
+      "glitch fx", "glitch_", "_glitch",
+      "stutters", "chop", "slice",
+      "buffer", "freeze", "glitches and industrial",
+      "kshmr glitch"
+    ],
+    "custom": []
+  },
+
+  "Impact": {
+    "default": [
+      "impact", "impacts", "slam",
+      "boom", "bang", "explosion", "cannon",
+      "cinematic impact", "orchestral impact",
+      "trailer hit", "epic hit", "power hit",
+      "drum impact", "perc impact",
+      "smash", "bash", "strike",
+      "impact_", "_impact", "impact1", "impact2",
+      "war impact", "battle impact", "epic slam",
+      "kshmr impact"
+    ],
+    "custom": []
+  },
+
+  "Sweep": {
+    "default": [
+      "sweep", "sweeps", "laser", "lazers",
+      "sweeps and lazers", "synth sweep",
+      "noise sweep", "filter sweep",
+      "white noise sweep", "pink noise sweep",
+      "sweep up", "sweep down", "sweep fx",
+      "laser beam", "pew", "jet",
+      "whoosh up", "whoosh down",
+      "sweep_", "_sweep", "dj sweep",
+      "frequency sweep", "kshmr sweep"
+    ],
+    "custom": []
+  },
+
+  "White Noise": {
+    "default": [
+      "white noise", "whitenoise", "white_noise",
+      "pink noise", "noise", "static",
+      "hiss", "wind noise", "air noise",
+      "breath noise", "tape noise", "vinyl noise",
+      "lo fi noise", "lofi noise", "room noise",
+      "analog noise", "signal noise",
+      "noise_", "_noise", "noise layer",
+      "texture noise", "kshmr noise"
+    ],
+    "custom": []
+  },
+
+  "Vinyl Scratch": {
+    "default": [
+      "vinyl", "scratch", "scratches", "vinyl scratch",
+      "vinyl and scratches", "turntable",
+      "dj scratch", "record scratch", "needle",
+      "vinyl rub", "backtrack", "cut",
+      "skratch", "phonograph", "disc scratch",
+      "dj", "turntablist",
+      "scratch_", "_scratch", "record rub",
+      "kshmr vinyl"
+    ],
+    "custom": []
+  },
+
+  "Video Game FX": {
+    "default": [
+      "video game", "video game fx", "game", "game fx",
+      "game sfx", "8bit", "8-bit", "16bit", "chiptune",
+      "arcade", "pixel", "retro game", "game over",
+      "level up", "power up", "coin", "beep",
+      "bloop", "blip", "synth beep",
+      "nes", "snes", "gameboy", "atari",
+      "shooter", "platformer", "rpg sound",
+      "kshmr game"
+    ],
+    "custom": []
+  },
+
+  "Animal Sound": {
+    "default": [
+      "animal", "animals", "creature", "wildlife",
+      "bird", "birds", "chirp", "tweet",
+      "wolf", "lion", "roar", "growl",
+      "dog", "cat", "horse", "cow",
+      "frog", "insect", "cricket", "elephant",
+      "monkey", "snake", "hiss",
+      "jungle", "savanna",
+      "whale", "dolphin", "eagle",
+      "animal fx", "creature sound",
+      "kshmr animal", "nature sound"
+    ],
+    "custom": []
+  },
+
+  "Vocal": {
+    "default": [
+      "vocal", "vox", "voice", "acapella", "acap",
+      "sing", "sung", "chant", "rap",
+      "spoken word", "spoken", "breath",
+      "female vocal", "male vocal", "choir",
+      "harmony vocal", "background vocal", "bgv",
+      "vocal chop", "chopped",
+      "pitched vocal", "vocal fx", "vocoder",
+      "talkbox", "vocal loop",
+      "hook vocal", "ethnic vocal", "world vocal",
+      "tribal vocal", "words and phrases",
+      "vocal word", "spoken phrase"
+    ],
+    "custom": []
+  },
+
+  "Vocal Adlib": {
+    "default": [
+      "adlib", "adlibs", "ad lib", "ad-lib",
+      "tone", "tones", "adlibs and tones",
+      "vocal tone", "hum", "oh", "ah", "ooh",
+      "yeah", "hey", "uh",
+      "background ad", "filler vocal",
+      "texture vocal", "whisper", "breathy",
+      "mumble", "drone vocal", "sustained vocal",
+      "vocal texture", "vocal color",
+      "kshmr adlib"
+    ],
+    "custom": []
+  },
+
+  "Vocal Loop": {
+    "default": [
+      "vocal loop", "vocal loops", "voice loop",
+      "loops and melodies", "vocal melody",
+      "vocal phrase loop", "singing loop",
+      "female loop", "male loop", "choir loop",
+      "harmony loop", "topline loop", "hook loop",
+      "chopped loop", "pitched loop",
+      "ethnic vocal loop", "world vocal loop",
+      "vocal line", "acapella loop", "sung loop",
+      "kshmr vocal loop"
+    ],
+    "custom": []
+  },
+
+  "Vocal Shout": {
+    "default": [
+      "shout", "shouts", "yell", "scream",
+      "cry", "wail", "call", "battle cry",
+      "war cry", "cheer", "crowd",
+      "vocal shout", "aggressive vocal", "power vocal",
+      "male shout", "female shout",
+      "chorus shout", "group shout",
+      "shout hit", "shout stab",
+      "shout_", "_shout", "kshmr shout"
+    ],
+    "custom": []
+  },
+
+  "Foley": {
+    "default": [
+      "foley", "footstep", "step", "door", "creak",
+      "cloth", "fabric", "glass", "break",
+      "wood", "crack", "earth", "gravel",
+      "metal", "clank", "body",
+      "paper", "plastic", "water", "drip",
+      "fire", "crackle", "leaves", "object",
+      "everyday", "real world", "prop",
+      "hit fx", "contact", "cloth rustle",
+      "leather", "kshmr foley"
+    ],
+    "custom": []
+  },
+
+  "Ambience": {
+    "default": [
+      "ambience", "ambient", "atmosphere", "atmos",
+      "room", "space", "reverb tail",
+      "drone", "texture", "soundscape", "background",
+      "field recording", "env", "environment",
+      "outdoor", "indoor", "forest", "rain",
+      "city", "crowd", "hum", "buzz",
+      "tape", "vinyl crackle", "lo fi", "lofi",
+      "ambiance", "ambiance and foley",
+      "dark ambience", "cinematic ambience",
+      "underwater", "cave", "wind ambience",
+      "kshmr ambience"
+    ],
+    "custom": []
+  },
+
+  "Live Instruments": {
+    "default": [
+      "live instrument", "live instruments",
+      "real instrument", "acoustic instrument",
+      "ethnic instrument", "main instrument",
+      "orchestral instrument", "action loop",
+      "live guitar", "live piano", "live bass",
+      "live strings", "live brass", "live woodwind",
+      "session", "live recording", "studio live",
+      "sitar", "oud", "sarod", "sarangi",
+      "duduk", "dholak", "dhol",
+      "mridangam", "veena", "rubab",
+      "shamisen", "koto", "erhu", "pipa",
+      "didgeridoo", "balafon", "kora",
+      "mbira", "kalimba", "pan flute",
+      "native flute", "folk instrument",
+      "kshmr live", "ethnic instruments",
+      "main instruments", "orchestral instruments"
+    ],
+    "custom": []
+  },
+
+  "World Sounds": {
+    "default": [
+      "world", "world sounds", "ethnic", "global",
+      "africa", "african", "tribal africa",
+      "australia", "aboriginal", "didgeridoo",
+      "east asia", "asian", "china", "japan",
+      "korea", "chinese", "japanese", "korean",
+      "europe", "european", "celtic", "folk europe",
+      "india", "indian", "bollywood", "vedic",
+      "latin america", "latin", "brazil", "salsa",
+      "samba", "bossa nova", "cumbia", "mariachi",
+      "middle east", "arabic", "persian",
+      "turkish", "arabic scale", "maqam",
+      "native america", "native american",
+      "pow wow", "indigenous", "shaman",
+      "world percussion", "global music",
+      "fusion", "kshmr world"
+    ],
+    "custom": []
+  },
+
+  "Song Starter": {
+    "default": [
+      "song starter", "song starters", "song_starter",
+      "starter", "starters", "full arrangement",
+      "idea", "sketch", "template",
+      "hip hop starter", "trap starter",
+      "main starter", "loop pack", "construction kit",
+      "full loop", "song idea", "song template",
+      "edm starter", "house starter",
+      "beats starter", "groove starter",
+      "phrase pack", "melody starter",
+      "multi loop", "multi stem", "combo",
+      "kshmr starter"
+    ],
+    "custom": []
+  },
+
+  "One Shot": {
+    "default": [
+      "one shot", "oneshot", "one_shot", "1shot",
+      "single", "note",
+      "pluck shot", "bell shot",
+      "piano note", "key note",
+      "instrument shot", "short",
+      "attack", "transient",
+      "smash", "slam",
+      "synth shot", "synth shots", "synth_shot",
+      "bass shot", "bass shots", "bass_shot",
+      "quick hit", "staccato"
+    ],
+    "custom": []
+  },
+
+  "MIDI": {
+    "default": [
+      "midi", "mid", "pattern", "sequence",
+      "progression", "groove midi",
+      "chord midi", "melody midi", "bass midi",
+      "arp midi", "drum midi", "beat midi",
+      "loop midi", "quantized", "piano roll",
+      "midi file", "midi pattern"
+    ],
+    "custom": []
+  },
+
+  "Full Mix": {
+    "default": [
+      "full mix", "fullmix", "stem", "mixdown",
+      "master", "mastered", "final", "complete",
+      "track", "song", "full track", "radio edit",
+      "instrumental", "extended",
+      "club mix", "remix",
+      "full arrangement", "complete track"
+    ],
+    "custom": []
+  },
+
+  "Misc": {
+    "default": [],
+    "custom": []
+  }
+}
