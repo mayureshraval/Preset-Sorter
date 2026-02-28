@@ -19,7 +19,12 @@ let fullPreviewData = [];
 let filteredPreviewData = [];
 let intelligenceMode = false;
 let isSorting = false;
+let isAnalyzing = false; // Blocks all folder interactions during scan
 let bpmRange = { min: 0, max: 300 }; // BPM slider range
+let skipDuplicates = false; // When true, exact duplicates (same name+size) are excluded from sort
+
+// ETA tracking
+let _etaStartTime = null;
 
 // ================= THEME =================
 let isDarkTheme = true; // default dark
@@ -148,9 +153,11 @@ function renderKeyFilterBar() {
   // ── IMPORTANT: collect keys from BPM-filtered data only ──────────────────
   // We apply the BPM filter manually here (same logic as applyFilter but key-agnostic)
   // so the note buttons only show keys that exist within the current BPM range.
+  const bpmIsFiltered = bpmRange.min > 0 || bpmRange.max < 300;
   const bpmFilteredData = fullPreviewData.filter(p => {
     const bpmRaw = parseFloat(p.metadata?.bpm || 0);
-    if (bpmRaw <= 0) return true; // no bpm data — always include for key scanning
+    if (!bpmIsFiltered) return true; // no active BPM filter — include all
+    if (bpmRaw <= 0) return false;   // no BPM data → excluded when filter is active
     const bpmInt = Math.round(bpmRaw);
     return bpmInt >= bpmRange.min && bpmInt <= bpmRange.max;
   });
@@ -295,6 +302,40 @@ function updateBpmRangeDisplay() {
 
   // Always update the folder hint when BPM changes
   updateSortFolderHint();
+}
+
+// ── ETA helpers ───────────────────────────────────────────────────────────────
+function formatETA(ms) {
+  if (!isFinite(ms) || ms <= 0) return "";
+  const sec = Math.ceil(ms / 1000);
+  if (sec < 5)  return "almost done…";
+  if (sec < 60) return `~${sec}s remaining`;
+  const min = Math.floor(sec / 60);
+  const s   = sec % 60;
+  return s === 0 ? `~${min}m remaining` : `~${min}m ${s}s remaining`;
+}
+
+function calcETA(pct) {
+  if (!_etaStartTime || pct <= 0) return "";
+  const elapsed = Date.now() - _etaStartTime;
+  const total   = elapsed / (pct / 100);
+  return formatETA(total - elapsed);
+}
+
+// ── BPM slider debounce ───────────────────────────────────────────────────────
+// The slider fires oninput on every pixel of drag. With large sample sets,
+// applyFilter → renderPreview can take 50-200ms, making the thumb feel sticky.
+// Fix: update the visual display immediately (cheap), but schedule the heavy
+// applyFilter call through a 120ms trailing-edge debounce so it only fires
+// once the user stops dragging (or pauses for >120ms).
+let _bpmFilterTimer = null;
+
+function scheduleBpmFilter() {
+  if (_bpmFilterTimer !== null) clearTimeout(_bpmFilterTimer);
+  _bpmFilterTimer = setTimeout(() => {
+    _bpmFilterTimer = null;
+    applyFilter();
+  }, 120);
 }
 
 function renderBpmSlider() {
@@ -563,7 +604,7 @@ function showEmptyState(message = "Ready") {
 
   // Click anywhere on the preview box to open folder picker
   previewDiv.onclick = async () => {
-    if (isSorting) return;
+    if (isSorting || isAnalyzing) return;
     await selectFolder();
   };
 
@@ -576,6 +617,799 @@ function showEmptyState(message = "Ready") {
     icon.style.transform = "translateY(0)";
     previewDiv.style.borderColor = "";
   };
+}
+
+// ================= ANALYZING STATE =================
+// Full-canvas animated overlay shown while scanning files.
+// Uses a canvas-based particle audio visualizer matching the purple theme.
+let _analyzeAnimFrame = null;
+let _analyzeProgressVal = 0;
+
+function showAnalyzingState(modeLabel) {
+  clearPreviewInteractivity();
+  previewDiv.innerHTML = "";
+  previewDiv.classList.add("is-analyzing");
+  previewDiv.style.position = "relative";
+  previewDiv.style.overflow = "hidden";
+
+  // Dim the Select Folder button to signal it's disabled
+  const sfBtn = document.querySelector("button[onclick*='selectFolder'], button[onclick*='selectFolder']");
+  document.querySelectorAll(".toolbar button, .header button").forEach(b => {
+    const txt = b.textContent.trim();
+    if (txt.includes("Select Folder") || txt.includes("Start Sort") || txt.includes("Undo")) {
+      b.disabled = true;
+      b.style.opacity = "0.4";
+      b.style.pointerEvents = "none";
+      b.style.cursor = "not-allowed";
+      b.dataset._analyzingDisabled = "1";
+    }
+  });
+
+  // ── Canvas ────────────────────────────────────────────────────────────────
+  const canvas = document.createElement("canvas");
+  canvas.id = "analyzeCanvas";
+  canvas.style.cssText = `
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    display: block;
+  `;
+  previewDiv.appendChild(canvas);
+
+  // ── Text overlay ─────────────────────────────────────────────────────────
+  const textWrap = document.createElement("div");
+  textWrap.id = "analyzeTextWrap";
+  textWrap.style.cssText = `
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    pointer-events: none; gap: 10px;
+    z-index: 2;
+  `;
+
+  const iconWrap = document.createElement("div");
+  iconWrap.style.cssText = `
+    font-size: 38px; line-height: 1;
+    animation: analyzeIconPulse 1.8s ease-in-out infinite;
+  `;
+  iconWrap.textContent = appMode === "sample" ? "🎵" : "🎛️";
+
+  const titleEl = document.createElement("div");
+  titleEl.style.cssText = `
+    font-size: 16px; font-weight: 700;
+    color: #fff; letter-spacing: 0.03em;
+    text-shadow: 0 0 20px rgba(148,0,211,0.9);
+  `;
+  titleEl.textContent = `Analyzing ${modeLabel}…`;
+
+  const subEl = document.createElement("div");
+  subEl.id = "analyzeSubText";
+  subEl.style.cssText = `
+    font-size: 12px; color: rgba(200,160,255,0.75);
+    letter-spacing: 0.02em;
+  `;
+  subEl.textContent = "Scanning files…";
+
+  const pctEl = document.createElement("div");
+  pctEl.id = "analyzePctText";
+  pctEl.style.cssText = `
+    font-size: 28px; font-weight: 800;
+    color: #c084fc;
+    text-shadow: 0 0 30px rgba(192,132,252,0.6);
+    letter-spacing: -0.02em;
+    min-width: 64px; text-align: center;
+    font-variant-numeric: tabular-nums;
+  `;
+  pctEl.textContent = "0%";
+
+  // Mini progress track below percentage
+  const miniTrackWrap = document.createElement("div");
+  miniTrackWrap.style.cssText = `
+    width: 200px; height: 4px;
+    background: rgba(148,0,211,0.18);
+    border-radius: 10px; overflow: hidden;
+    margin-top: 4px;
+  `;
+  const miniFill = document.createElement("div");
+  miniFill.id = "analyzeMiniBar";
+  miniFill.style.cssText = `
+    height: 100%; width: 0%;
+    background: linear-gradient(90deg, #9400d3, #c084fc, #9400d3);
+    background-size: 200% 100%;
+    border-radius: 10px;
+    transition: width 0.25s ease;
+    animation: analyzeBarShimmer 1.6s linear infinite;
+  `;
+  miniTrackWrap.appendChild(miniFill);
+
+  textWrap.appendChild(iconWrap);
+  textWrap.appendChild(pctEl);
+  textWrap.appendChild(titleEl);
+  textWrap.appendChild(subEl);
+  textWrap.appendChild(miniTrackWrap);
+  previewDiv.appendChild(textWrap);
+
+  // ── Start canvas animation ────────────────────────────────────────────────
+  _analyzeProgressVal = 0;
+  _startAnalyzeCanvas(canvas);
+}
+
+function updateAnalyzingProgress(val, label) {
+  _analyzeProgressVal = val;
+  const pctEl  = document.getElementById("analyzePctText");
+  const barEl  = document.getElementById("analyzeMiniBar");
+  const subEl  = document.getElementById("analyzeSubText");
+  if (pctEl)  pctEl.textContent  = val + "%";
+  if (barEl)  barEl.style.width  = val + "%";
+  if (subEl && label) subEl.textContent = label;
+}
+
+function stopAnalyzingState() {
+  if (_analyzeAnimFrame) {
+    cancelAnimationFrame(_analyzeAnimFrame);
+    _analyzeAnimFrame = null;
+  }
+  previewDiv.classList.remove("is-analyzing");
+  // Restore all disabled toolbar buttons
+  document.querySelectorAll(".toolbar button, .header button").forEach(b => {
+    if (b.dataset._analyzingDisabled) {
+      b.disabled = false;
+      b.style.opacity = "";
+      b.style.pointerEvents = "";
+      b.style.cursor = "";
+      delete b.dataset._analyzingDisabled;
+    }
+  });
+  // Canvas stays visible briefly, cleared by the next renderPreview/showEmptyState call
+}
+
+function _startAnalyzeCanvas(canvas) {
+  const W = () => canvas.offsetWidth  || 800;
+  const H = () => canvas.offsetHeight || 400;
+
+  // Resize canvas resolution to actual px size
+  function resize() {
+    canvas.width  = canvas.offsetWidth  * (window.devicePixelRatio || 1);
+    canvas.height = canvas.offsetHeight * (window.devicePixelRatio || 1);
+  }
+  resize();
+  window.addEventListener("resize", resize);
+
+  const ctx = canvas.getContext("2d");
+
+  // ── Particles ─────────────────────────────────────────────────────────────
+  const PARTICLE_COUNT = 72;
+  const particles = [];
+
+  function randBetween(a, b) { return a + Math.random() * (b - a); }
+
+  // Purple/violet/magenta palette matching the app theme
+  const PALETTE = [
+    "rgba(148,0,211,",    // deep purple
+    "rgba(192,132,252,",  // lavender
+    "rgba(220,100,255,",  // bright violet
+    "rgba(100,0,180,",    // dark indigo
+    "rgba(255,100,255,",  // magenta
+    "rgba(80,0,160,",     // near-black purple
+  ];
+
+  for (let i = 0; i < PARTICLE_COUNT; i++) {
+    particles.push({
+      x: Math.random(),          // 0-1 normalised
+      y: Math.random(),
+      vx: randBetween(-0.06, 0.06),
+      vy: randBetween(-0.06, 0.06),
+      r: randBetween(1.5, 5),
+      alpha: randBetween(0.3, 0.85),
+      color: PALETTE[Math.floor(Math.random() * PALETTE.length)],
+      phase: Math.random() * Math.PI * 2,
+      speed: randBetween(0.004, 0.012),
+    });
+  }
+
+  // ── Audio bars (fake equalizer driven by time + progress) ─────────────────
+  const BAR_COUNT = 48;
+  const barPhases = Array.from({ length: BAR_COUNT }, (_, i) => i * 0.41 + Math.random() * Math.PI);
+  const barSpeeds = Array.from({ length: BAR_COUNT }, () => randBetween(0.6, 2.2));
+
+  let t = 0;
+  let lastTime = performance.now();
+
+  function draw(now) {
+    _analyzeAnimFrame = requestAnimationFrame(draw);
+    const dt = Math.min((now - lastTime) / 16.67, 3); // delta in "frames" (capped)
+    lastTime = now;
+    t += dt;
+
+    const dpr = window.devicePixelRatio || 1;
+    const cw = canvas.width;
+    const ch = canvas.height;
+
+    // Logical size (unscaled)
+    const lw = cw / dpr;
+    const lh = ch / dpr;
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    // ── Background ─────────────────────────────────────────────────────────
+    // Fade to near-black with a subtle purple core
+    ctx.clearRect(0, 0, lw, lh);
+    ctx.fillStyle = "#0d0d0f";
+    ctx.fillRect(0, 0, lw, lh);
+
+    // Radial glow in centre — intensifies as progress grows
+    const progress = _analyzeProgressVal / 100;
+    const glowR = Math.min(lw, lh) * (0.25 + progress * 0.2);
+    const grd = ctx.createRadialGradient(lw / 2, lh / 2, 0, lw / 2, lh / 2, glowR);
+    grd.addColorStop(0, `rgba(148,0,211,${0.07 + progress * 0.08})`);
+    grd.addColorStop(0.5, `rgba(80,0,160,${0.04 + progress * 0.04})`);
+    grd.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = grd;
+    ctx.fillRect(0, 0, lw, lh);
+
+    // ── Equalizer bars at bottom ────────────────────────────────────────────
+    const barW    = lw / (BAR_COUNT * 1.6);
+    const barGap  = (lw - BAR_COUNT * barW) / (BAR_COUNT + 1);
+    const baseY   = lh * 0.82;
+    const maxBarH = lh * 0.32;
+
+    for (let i = 0; i < BAR_COUNT; i++) {
+      const phase = barPhases[i] + t * barSpeeds[i] * 0.04;
+      // Drive amplitude from progress — bars grow as files are scanned
+      const amp  = 0.15 + progress * 0.7 + Math.sin(t * 0.03 + i * 0.3) * 0.08;
+      const h    = Math.abs(Math.sin(phase) * maxBarH * amp) + 3;
+      const x    = barGap + i * (barW + barGap);
+
+      // Mirror: bar grows upward from baseY, with a reflection below
+      const barAlpha = 0.55 + 0.35 * (h / maxBarH);
+      const colorIdx = Math.floor(i / BAR_COUNT * PALETTE.length) % PALETTE.length;
+
+      // Main bar
+      const barGrd = ctx.createLinearGradient(0, baseY - h, 0, baseY);
+      barGrd.addColorStop(0, `${PALETTE[colorIdx]}${barAlpha.toFixed(2)})`);
+      barGrd.addColorStop(0.5, `${PALETTE[(colorIdx + 1) % PALETTE.length]}${(barAlpha * 0.8).toFixed(2)})`);
+      barGrd.addColorStop(1, `${PALETTE[colorIdx]}0.05)`);
+      ctx.fillStyle = barGrd;
+      ctx.beginPath();
+      ctx.roundRect(x, baseY - h, barW, h, [2, 2, 0, 0]);
+      ctx.fill();
+
+      // Reflection (mirrored, faded)
+      const refGrd = ctx.createLinearGradient(0, baseY, 0, baseY + h * 0.45);
+      refGrd.addColorStop(0, `${PALETTE[colorIdx]}0.18)`);
+      refGrd.addColorStop(1, `${PALETTE[colorIdx]}0.0)`);
+      ctx.fillStyle = refGrd;
+      ctx.beginPath();
+      ctx.roundRect(x, baseY, barW, h * 0.45, [0, 0, 2, 2]);
+      ctx.fill();
+    }
+
+    // ── Particles ───────────────────────────────────────────────────────────
+    for (const p of particles) {
+      p.phase += p.speed * dt;
+      // Gently drift
+      p.x += p.vx * 0.002 * dt;
+      p.y += p.vy * 0.002 * dt;
+      // Wrap
+      if (p.x < -0.05) p.x = 1.05;
+      if (p.x > 1.05)  p.x = -0.05;
+      if (p.y < -0.05) p.y = 1.05;
+      if (p.y > 1.05)  p.y = -0.05;
+
+      const pulse  = 0.5 + 0.5 * Math.sin(p.phase);
+      const alpha  = p.alpha * (0.4 + 0.6 * pulse);
+      const radius = p.r * (0.7 + 0.5 * pulse);
+      ctx.beginPath();
+      ctx.arc(p.x * lw, p.y * lh, radius, 0, Math.PI * 2);
+      ctx.fillStyle = `${p.color}${alpha.toFixed(2)})`;
+      ctx.fill();
+
+      // Soft glow halo
+      if (radius > 3) {
+        const g = ctx.createRadialGradient(p.x * lw, p.y * lh, 0, p.x * lw, p.y * lh, radius * 3.5);
+        g.addColorStop(0, `${p.color}${(alpha * 0.35).toFixed(2)})`);
+        g.addColorStop(1, `${p.color}0.0)`);
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(p.x * lw, p.y * lh, radius * 3.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // ── Connecting lines between close particles ────────────────────────────
+    const lineThresh = 0.18;
+    for (let i = 0; i < particles.length; i++) {
+      for (let j = i + 1; j < particles.length; j++) {
+        const dx = particles[i].x - particles[j].x;
+        const dy = particles[i].y - particles[j].y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < lineThresh) {
+          const lineAlpha = (1 - dist / lineThresh) * 0.12 * progress;
+          ctx.beginPath();
+          ctx.moveTo(particles[i].x * lw, particles[i].y * lh);
+          ctx.lineTo(particles[j].x * lw, particles[j].y * lh);
+          ctx.strokeStyle = `rgba(148,0,211,${lineAlpha.toFixed(3)})`;
+          ctx.lineWidth = 0.8;
+          ctx.stroke();
+        }
+      }
+    }
+
+    // ── Scanning sweep line ──────────────────────────────────────────────────
+    // A vertical purple line that sweeps left→right as progress advances
+    const sweepX = lw * progress;
+    if (progress > 0 && progress < 1) {
+      const swpGrd = ctx.createLinearGradient(sweepX - 24, 0, sweepX + 2, 0);
+      swpGrd.addColorStop(0, "rgba(148,0,211,0.0)");
+      swpGrd.addColorStop(0.7, "rgba(192,132,252,0.12)");
+      swpGrd.addColorStop(1, "rgba(220,100,255,0.75)");
+      ctx.fillStyle = swpGrd;
+      ctx.fillRect(sweepX - 24, 0, 26, lh);
+
+      // Bright leading edge
+      ctx.beginPath();
+      ctx.moveTo(sweepX, 0);
+      ctx.lineTo(sweepX, lh);
+      ctx.strokeStyle = "rgba(220,100,255,0.9)";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+
+    // ── Completed fill overlay ───────────────────────────────────────────────
+    // A very subtle tinted fill to the left of the sweep line
+    if (progress > 0) {
+      ctx.fillStyle = `rgba(148,0,211,${0.04 * progress})`;
+      ctx.fillRect(0, 0, sweepX, lh);
+    }
+  }
+
+
+  requestAnimationFrame(draw);
+}
+
+// =============================================================================
+// ================= SORT ANIMATION ===========================================
+// =============================================================================
+
+let _sortAnimFrame  = null;
+let _sortProgressVal = 0;
+
+function showSortingAnimation(totalCount) {
+  clearPreviewInteractivity();
+  previewDiv.innerHTML = "";
+  previewDiv.classList.add("is-analyzing");
+  previewDiv.style.position = "relative";
+  previewDiv.style.overflow = "hidden";
+  _sortProgressVal = 0;
+
+  const canvas = document.createElement("canvas");
+  canvas.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block;";
+  previewDiv.appendChild(canvas);
+
+  const textWrap = document.createElement("div");
+  textWrap.style.cssText = `
+    position:absolute;inset:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;pointer-events:none;
+    gap:8px;z-index:2;
+  `;
+
+  const iconEl = document.createElement("div");
+  iconEl.style.cssText = "font-size:36px;line-height:1;animation:sortIconSpin 2s linear infinite;";
+  iconEl.textContent = "⚙️";
+
+  const pctEl = document.createElement("div");
+  pctEl.id = "sortPctText";
+  pctEl.style.cssText = `
+    font-size:28px;font-weight:800;color:#c084fc;
+    text-shadow:0 0 30px rgba(192,132,252,0.6);
+    letter-spacing:-0.02em;font-variant-numeric:tabular-nums;
+    min-width:64px;text-align:center;
+  `;
+  pctEl.textContent = "0%";
+
+  const titleEl = document.createElement("div");
+  titleEl.style.cssText = "font-size:16px;font-weight:700;color:#fff;letter-spacing:0.03em;text-shadow:0 0 20px rgba(148,0,211,0.9);";
+  titleEl.textContent = `Sorting ${totalCount} files…`;
+
+  const subEl = document.createElement("div");
+  subEl.id = "sortSubText";
+  subEl.style.cssText = "font-size:12px;color:rgba(200,160,255,0.75);";
+  subEl.textContent = "Moving files into folders…";
+
+  const miniTrackWrap = document.createElement("div");
+  miniTrackWrap.style.cssText = "width:200px;height:4px;background:rgba(148,0,211,0.18);border-radius:10px;overflow:hidden;margin-top:4px;";
+  const miniFill = document.createElement("div");
+  miniFill.id = "sortMiniBar";
+  miniFill.style.cssText = `height:100%;width:0%;background:linear-gradient(90deg,#9400d3,#c084fc,#9400d3);
+    background-size:200% 100%;border-radius:10px;transition:width 0.2s ease;
+    animation:analyzeBarShimmer 1.6s linear infinite;`;
+  miniTrackWrap.appendChild(miniFill);
+
+  textWrap.appendChild(iconEl);
+  textWrap.appendChild(pctEl);
+  textWrap.appendChild(titleEl);
+  textWrap.appendChild(subEl);
+  textWrap.appendChild(miniTrackWrap);
+  previewDiv.appendChild(textWrap);
+
+  _startSortCanvas(canvas);
+}
+
+function updateSortProgress(val, eta) {
+  _sortProgressVal = val;
+  const p = document.getElementById("sortPctText");
+  const b = document.getElementById("sortMiniBar");
+  const s = document.getElementById("sortSubText");
+  if (p) p.textContent = val + "%";
+  if (b) b.style.width  = val + "%";
+  if (s && val > 0) s.textContent = eta ? `${val}% complete  —  ${eta}` : `${val}% complete…`;
+}
+
+function stopSortAnimation() {
+  if (_sortAnimFrame) { cancelAnimationFrame(_sortAnimFrame); _sortAnimFrame = null; }
+  previewDiv.classList.remove("is-analyzing");
+}
+
+function _startSortCanvas(canvas) {
+  function resize() {
+    canvas.width  = canvas.offsetWidth  * (window.devicePixelRatio || 1);
+    canvas.height = canvas.offsetHeight * (window.devicePixelRatio || 1);
+  }
+  resize();
+  window.addEventListener("resize", resize);
+  const ctx = canvas.getContext("2d");
+
+  // Flying file "cards" that shoot rightward into sorted folder slots
+  const CARD_COUNT = 36;
+  const cards = [];
+  const COLORS = [
+    "rgba(148,0,211,", "rgba(192,132,252,", "rgba(220,100,255,",
+    "rgba(100,0,180,", "rgba(255,100,255,",
+  ];
+
+  function spawnCard() {
+    return {
+      x: -60,
+      y: (0.15 + Math.random() * 0.7),
+      vx: 3.5 + Math.random() * 5,
+      vy: (Math.random() - 0.5) * 0.3,
+      w: 40 + Math.random() * 30,
+      h: 22 + Math.random() * 12,
+      alpha: 0.7 + Math.random() * 0.3,
+      color: COLORS[Math.floor(Math.random() * COLORS.length)],
+      rot: (Math.random() - 0.5) * 0.25,
+      delay: Math.random() * 120,
+    };
+  }
+  for (let i = 0; i < CARD_COUNT; i++) {
+    const c = spawnCard();
+    c.x = Math.random(); // normalised 0-1 scatter initial
+    c.delay = 0;
+    cards.push(c);
+  }
+
+  let t = 0;
+  let lastTime = performance.now();
+
+  function draw(now) {
+    _sortAnimFrame = requestAnimationFrame(draw);
+    const dt = Math.min((now - lastTime) / 16.67, 3);
+    lastTime = now;
+    t += dt;
+
+    const dpr = window.devicePixelRatio || 1;
+    const cw = canvas.width, ch = canvas.height;
+    const lw = cw / dpr, lh = ch / dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const progress = _sortProgressVal / 100;
+
+    // Background
+    ctx.fillStyle = "#0d0d0f";
+    ctx.fillRect(0, 0, lw, lh);
+
+    // Central radial glow — grows with progress
+    const grd = ctx.createRadialGradient(lw/2, lh/2, 0, lw/2, lh/2, Math.min(lw,lh)*0.55);
+    grd.addColorStop(0, `rgba(148,0,211,${0.06 + progress*0.1})`);
+    grd.addColorStop(0.6, `rgba(80,0,160,${0.03 + progress*0.04})`);
+    grd.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = grd;
+    ctx.fillRect(0, 0, lw, lh);
+
+    // Progress fill from left
+    if (progress > 0) {
+      const pGrd = ctx.createLinearGradient(0, 0, lw * progress, 0);
+      pGrd.addColorStop(0,   "rgba(148,0,211,0.06)");
+      pGrd.addColorStop(0.85, "rgba(192,132,252,0.10)");
+      pGrd.addColorStop(1,   "rgba(220,100,255,0.0)");
+      ctx.fillStyle = pGrd;
+      ctx.fillRect(0, 0, lw * progress, lh);
+    }
+
+    // Right-side "sorted folder" target zone
+    const targetX = lw * 0.82;
+    const tGrd = ctx.createLinearGradient(targetX, 0, lw, 0);
+    tGrd.addColorStop(0, "rgba(148,0,211,0.0)");
+    tGrd.addColorStop(0.3, `rgba(148,0,211,${0.06 + progress*0.12})`);
+    tGrd.addColorStop(1, `rgba(80,0,160,${0.12 + progress*0.1})`);
+    ctx.fillStyle = tGrd;
+    ctx.fillRect(targetX, 0, lw - targetX, lh);
+
+    // Folder icon on right
+    ctx.font = `${28 + progress*8}px serif`;
+    ctx.globalAlpha = 0.25 + progress * 0.5;
+    ctx.fillText("📁", lw * 0.88 - 14, lh * 0.5 + 10);
+    ctx.globalAlpha = 1;
+
+    // Flying cards
+    for (const c of cards) {
+      if (c.delay > 0) { c.delay -= dt; continue; }
+      c.x += (c.vx * (1 + progress * 1.5)) * 0.004 * dt;
+      c.y += c.vy * 0.003 * dt;
+
+      // Bounce y at edges
+      if (c.y < 0.05) { c.y = 0.05; c.vy = Math.abs(c.vy); }
+      if (c.y > 0.92) { c.y = 0.92; c.vy = -Math.abs(c.vy); }
+
+      // Respawn when off right edge
+      if (c.x > 1.15) {
+        Object.assign(c, spawnCard());
+        continue;
+      }
+
+      const cx = c.x * lw;
+      const cy = c.y * lh;
+
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(c.rot);
+
+      // Card body
+      const cardGrd = ctx.createLinearGradient(-c.w/2, -c.h/2, c.w/2, c.h/2);
+      cardGrd.addColorStop(0, `${c.color}${(c.alpha * 0.9).toFixed(2)})`);
+      cardGrd.addColorStop(1, `${c.color}${(c.alpha * 0.4).toFixed(2)})`);
+      ctx.fillStyle = cardGrd;
+      ctx.beginPath();
+      ctx.roundRect(-c.w/2, -c.h/2, c.w, c.h, 4);
+      ctx.fill();
+
+      // Card border
+      ctx.strokeStyle = `${c.color}0.6)`;
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+
+      // Motion trail lines
+      ctx.strokeStyle = `${c.color}${(c.alpha * 0.2).toFixed(2)})`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(-c.w/2, 0);
+      ctx.lineTo(-c.w/2 - 20 - c.vx * 3, 0);
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    // Sweep line at progress boundary
+    const sweepX = lw * progress;
+    if (progress > 0.01 && progress < 0.99) {
+      const swpGrd = ctx.createLinearGradient(sweepX - 20, 0, sweepX + 2, 0);
+      swpGrd.addColorStop(0, "rgba(148,0,211,0.0)");
+      swpGrd.addColorStop(1, "rgba(220,100,255,0.8)");
+      ctx.fillStyle = swpGrd;
+      ctx.fillRect(sweepX - 20, 0, 22, lh);
+      ctx.beginPath();
+      ctx.moveTo(sweepX, 0); ctx.lineTo(sweepX, lh);
+      ctx.strokeStyle = "rgba(220,100,255,0.9)";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+  }
+
+  requestAnimationFrame(draw);
+}
+
+// =============================================================================
+// ================= UNDO ANIMATION ============================================
+// =============================================================================
+
+let _undoAnimFrame = null;
+
+function showUndoAnimation() {
+  clearPreviewInteractivity();
+  previewDiv.innerHTML = "";
+  previewDiv.classList.add("is-analyzing");
+  previewDiv.style.position = "relative";
+  previewDiv.style.overflow = "hidden";
+
+  const canvas = document.createElement("canvas");
+  canvas.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block;";
+  previewDiv.appendChild(canvas);
+
+  const textWrap = document.createElement("div");
+  textWrap.style.cssText = `
+    position:absolute;inset:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;pointer-events:none;
+    gap:8px;z-index:2;
+  `;
+
+  const iconEl = document.createElement("div");
+  iconEl.style.cssText = "font-size:36px;line-height:1;animation:undoIconRewind 1s ease-in-out infinite;";
+  iconEl.textContent = "↩️";
+
+  const titleEl = document.createElement("div");
+  titleEl.style.cssText = "font-size:16px;font-weight:700;color:#fff;letter-spacing:0.03em;text-shadow:0 0 20px rgba(148,0,211,0.9);";
+  titleEl.textContent = "Restoring original locations…";
+
+  const subEl = document.createElement("div");
+  subEl.className = "undo-sub-text";
+  subEl.style.cssText = "font-size:12px;color:rgba(200,160,255,0.75);";
+  subEl.textContent = "Moving files back and removing empty folders";
+
+  const dotWrap = document.createElement("div");
+  dotWrap.style.cssText = "display:flex;gap:7px;margin-top:6px;";
+  for (let i = 0; i < 3; i++) {
+    const dot = document.createElement("div");
+    dot.style.cssText = `
+      width:7px;height:7px;border-radius:50%;
+      background:#9400d3;
+      animation:undoDotBounce 1.1s ease-in-out infinite;
+      animation-delay:${i * 0.18}s;
+    `;
+    dotWrap.appendChild(dot);
+  }
+
+  textWrap.appendChild(iconEl);
+  textWrap.appendChild(titleEl);
+  textWrap.appendChild(subEl);
+  textWrap.appendChild(dotWrap);
+  previewDiv.appendChild(textWrap);
+
+  _startUndoCanvas(canvas);
+}
+
+function stopUndoAnimation() {
+  if (_undoAnimFrame) { cancelAnimationFrame(_undoAnimFrame); _undoAnimFrame = null; }
+  previewDiv.classList.remove("is-analyzing");
+}
+
+function _startUndoCanvas(canvas) {
+  function resize() {
+    canvas.width  = canvas.offsetWidth  * (window.devicePixelRatio || 1);
+    canvas.height = canvas.offsetHeight * (window.devicePixelRatio || 1);
+  }
+  resize();
+  window.addEventListener("resize", resize);
+  const ctx = canvas.getContext("2d");
+
+  const COLORS = [
+    "rgba(148,0,211,", "rgba(192,132,252,", "rgba(100,0,180,",
+    "rgba(220,100,255,", "rgba(80,0,160,",
+  ];
+
+  // Cards flying RIGHT → LEFT (reverse of sort)
+  const CARD_COUNT = 32;
+  const cards = [];
+  function spawnUndo() {
+    return {
+      x: 1.1 + Math.random() * 0.3,
+      y: 0.12 + Math.random() * 0.76,
+      vx: -(3 + Math.random() * 5),  // negative = leftward
+      vy: (Math.random() - 0.5) * 0.3,
+      w: 36 + Math.random() * 28, h: 20 + Math.random() * 12,
+      alpha: 0.6 + Math.random() * 0.35,
+      color: COLORS[Math.floor(Math.random() * COLORS.length)],
+      rot: (Math.random() - 0.5) * 0.3,
+    };
+  }
+  for (let i = 0; i < CARD_COUNT; i++) {
+    const c = spawnUndo();
+    c.x = Math.random();
+    cards.push(c);
+  }
+
+  // Rewind arc particles — orbit around centre counter-clockwise
+  const ARC_COUNT = 28;
+  const arcs = Array.from({ length: ARC_COUNT }, (_, i) => ({
+    angle: (i / ARC_COUNT) * Math.PI * 2,
+    radius: 0.12 + Math.random() * 0.18,
+    speed: -(0.018 + Math.random() * 0.02), // negative = CCW
+    size: 2 + Math.random() * 4,
+    alpha: 0.4 + Math.random() * 0.5,
+    color: COLORS[Math.floor(Math.random() * COLORS.length)],
+  }));
+
+  let t = 0, lastTime = performance.now();
+
+  function draw(now) {
+    _undoAnimFrame = requestAnimationFrame(draw);
+    const dt = Math.min((now - lastTime) / 16.67, 3);
+    lastTime = now;
+    t += dt;
+
+    const dpr = window.devicePixelRatio || 1;
+    const lw = canvas.width / dpr, lh = canvas.height / dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    ctx.fillStyle = "#0d0d0f";
+    ctx.fillRect(0, 0, lw, lh);
+
+    // Warm purple-magenta radial glow
+    const grd = ctx.createRadialGradient(lw*0.5, lh*0.5, 0, lw*0.5, lh*0.5, Math.min(lw,lh)*0.5);
+    grd.addColorStop(0, "rgba(148,0,211,0.10)");
+    grd.addColorStop(0.5, "rgba(80,0,160,0.05)");
+    grd.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = grd;
+    ctx.fillRect(0, 0, lw, lh);
+
+    // Right side fades out (source — already sorted)
+    const fadeGrd = ctx.createLinearGradient(lw*0.6, 0, lw, 0);
+    fadeGrd.addColorStop(0, "rgba(80,0,160,0.0)");
+    fadeGrd.addColorStop(1, "rgba(80,0,160,0.12)");
+    ctx.fillStyle = fadeGrd;
+    ctx.fillRect(lw*0.6, 0, lw*0.4, lh);
+
+    // Left folder target
+    ctx.font = "28px serif";
+    ctx.globalAlpha = 0.4;
+    ctx.fillText("📂", lw*0.06, lh*0.5 + 10);
+    ctx.globalAlpha = 1;
+
+    // Flying cards (leftward)
+    for (const c of cards) {
+      c.x += c.vx * 0.004 * dt;
+      c.y += c.vy * 0.003 * dt;
+      if (c.y < 0.05) { c.y=0.05; c.vy=Math.abs(c.vy); }
+      if (c.y > 0.92) { c.y=0.92; c.vy=-Math.abs(c.vy); }
+      if (c.x < -0.15) Object.assign(c, spawnUndo());
+
+      ctx.save();
+      ctx.translate(c.x * lw, c.y * lh);
+      ctx.rotate(c.rot);
+
+      const cg = ctx.createLinearGradient(-c.w/2, -c.h/2, c.w/2, c.h/2);
+      cg.addColorStop(0, `${c.color}${(c.alpha*0.85).toFixed(2)})`);
+      cg.addColorStop(1, `${c.color}${(c.alpha*0.35).toFixed(2)})`);
+      ctx.fillStyle = cg;
+      ctx.beginPath(); ctx.roundRect(-c.w/2, -c.h/2, c.w, c.h, 4); ctx.fill();
+      ctx.strokeStyle = `${c.color}0.55)`; ctx.lineWidth = 0.8; ctx.stroke();
+
+      // Trailing lines (rightward = behind card)
+      ctx.strokeStyle = `${c.color}${(c.alpha*0.18).toFixed(2)})`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(c.w/2, 0);
+      ctx.lineTo(c.w/2 + 18 + Math.abs(c.vx)*2.5, 0);
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    // CCW orbit particles
+    const cx2 = lw * 0.5, cy2 = lh * 0.5;
+    for (const p of arcs) {
+      p.angle += p.speed * dt;
+      const px = cx2 + Math.cos(p.angle) * p.radius * Math.min(lw, lh);
+      const py = cy2 + Math.sin(p.angle) * p.radius * Math.min(lw, lh);
+      const pulse = 0.5 + 0.5 * Math.sin(t * 0.05 + p.angle * 3);
+      ctx.beginPath();
+      ctx.arc(px, py, p.size * (0.7 + 0.4 * pulse), 0, Math.PI*2);
+      ctx.fillStyle = `${p.color}${(p.alpha*(0.4+0.6*pulse)).toFixed(2)})`;
+      ctx.fill();
+    }
+
+    // Counter-clockwise ring
+    const ringR = Math.min(lw,lh) * 0.22;
+    const dashOffset = (t * 1.8) % 40; // moves CCW
+    ctx.beginPath();
+    ctx.arc(cx2, cy2, ringR, 0, Math.PI*2);
+    ctx.strokeStyle = "rgba(148,0,211,0.18)";
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([8, 32]);
+    ctx.lineDashOffset = dashOffset;
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  requestAnimationFrame(draw);
 }
 
 // ================= SORTED STATE =================
@@ -837,12 +1671,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
   window.addEventListener("dragenter", (e) => {
     e.preventDefault();
+    if (isAnalyzing) return;
     dragCounter++;
     if (dragCounter === 1) showDropOverlay();
   });
 
   window.addEventListener("dragleave", (e) => {
     e.preventDefault();
+    if (isAnalyzing) return;
     dragCounter--;
     if (dragCounter === 0) hideDropOverlay();
   });
@@ -852,7 +1688,7 @@ document.addEventListener("DOMContentLoaded", () => {
     dragCounter = 0;
     hideDropOverlay();
 
-    if (isSorting) return;
+    if (isSorting || isAnalyzing) return;
 
     // Electron exposes the real filesystem path on the File object as .path
     const files = Array.from(e.dataTransfer.files);
@@ -1002,21 +1838,27 @@ function renderKeywordEditor(keywords) {
 
 // ================= SELECT FOLDER =================
 async function selectFolder() {
+  if (isAnalyzing || isSorting) return;
   currentFolder = await window.api.chooseFolder();
   if (!currentFolder) { showEmptyState(); return; }
   await runPreview(currentFolder);
 }
 
 async function runPreview(folder) {
-  statusText.innerText = appMode === "sample" ? "Analyzing samples..." : "Analyzing presets...";
-  progressFill.style.width = "0%";
-  previewDiv.innerHTML = "";
-
-  // Wire analyze progress bar for both modes
+  isAnalyzing = true;
+  _etaStartTime = Date.now();
   const modeLabel = appMode === "sample" ? "samples" : "presets";
+
+  // Show the animated analyzing canvas — replaces empty state or any prior content
+  showAnalyzingState(modeLabel);
+  statusText.innerText = appMode === "sample" ? "Analyzing samples…" : "Analyzing presets…";
+  progressFill.style.width = "0%";
+
   window.api.onAnalyzeProgress(val => {
     progressFill.style.width = val + "%";
-    statusText.innerText = `Analyzing ${modeLabel}... ${val}%`;
+    const eta = calcETA(val);
+    statusText.innerText = `Analyzing ${modeLabel}… ${val}%${eta ? "  |  " + eta : ""}`;
+    updateAnalyzingProgress(val, `${val}% — scanning files…${eta ? "  " + eta : ""}`);
   });
 
   try {
@@ -1027,12 +1869,17 @@ async function runPreview(folder) {
     }
   } catch (err) {
     console.error(err);
+    isAnalyzing = false;
+    stopAnalyzingState();
     progressFill.style.width = "0%";
     statusText.innerText = "Error analyzing folder.";
+    showEmptyState("Error analyzing folder. Try again.");
     return;
   }
 
-  // Analysis complete — snap bar to 100% briefly then clear it
+  // Done — stop canvas, snap bar
+  stopAnalyzingState();
+  isAnalyzing = false;
   progressFill.style.width = "100%";
   setTimeout(() => { progressFill.style.width = "0%"; }, 600);
 
@@ -1069,10 +1916,14 @@ function applyFilter() {
         // BPM range filter (works for both modes if bpm data available)
         // Round to integer — BPM metadata is often stored as float (e.g. 112.9)
         // and we want "112 BPM" displayed files to match a 112–112 range exactly.
+        // When the user has set a non-default BPM range, files with NO BPM data
+        // are also excluded — they can't be confirmed to be in the requested range.
         const bpmRaw = parseFloat(
           (appMode === "sample" ? item.metadata?.bpm : item.intelligence?.bpm) || 0
         );
-        if (bpmRaw > 0) {
+        const bpmIsFiltered = bpmRange.min > 0 || bpmRange.max < 300;
+        if (bpmIsFiltered) {
+          if (bpmRaw <= 0) return false; // no BPM data → exclude when a range is active
           const bpmInt = Math.round(bpmRaw);
           if (bpmInt < bpmRange.min || bpmInt > bpmRange.max) return false;
         }
@@ -1213,9 +2064,17 @@ function buildSampleTagsWrap(preset) {
   // Duplicate warning badge (highest priority — very visible)
   if (preset.isDuplicate) {
     const dupBadge = document.createElement("span");
-    dupBadge.className = "duplicate-badge";
-    dupBadge.textContent = "⚠ DUP";
-    dupBadge.title = "Duplicate filename detected in this folder";
+    const isExact   = preset.duplicateType === "exact";
+    const willSkip  = isExact && !preset.isKeptCopy && skipDuplicates;
+    dupBadge.className = `duplicate-badge${willSkip ? " dup-skipped" : ""}`;
+    dupBadge.textContent = isExact ? "⚠ DUP" : "⚠ VARIANT";
+    dupBadge.title = isExact
+      ? (willSkip
+          ? "Exact duplicate (same name & size) — will be skipped during sort"
+          : preset.isKeptCopy
+            ? "Exact duplicate — this copy will be kept"
+            : "Exact duplicate (same name & size). Enable 'Skip exact duplicates' to exclude.")
+      : "Same filename but different file size — likely a different version. Will be renamed with (1), (2) suffix.";
     wrap.appendChild(dupBadge);
   }
 
@@ -1330,19 +2189,90 @@ function renderPreview() {
   leftBtns.appendChild(expandBtn);
   leftBtns.appendChild(collapseBtn);
 
-  // Duplicate count warning
-  const dupCount = filteredPreviewData.filter(p => p.isDuplicate).length;
+  // Duplicate count warning + skip toggle
+  const exactDups   = filteredPreviewData.filter(p => p.isDuplicate && p.duplicateType === "exact" && !p.isKeptCopy);
+  const variantDups = filteredPreviewData.filter(p => p.isDuplicate && p.duplicateType === "variant");
+  const dupCount    = filteredPreviewData.filter(p => p.isDuplicate).length;
+
   if (dupCount > 0) {
+    const dupWrap = document.createElement("div");
+    dupWrap.style.cssText = `display:inline-flex; align-items:center; gap:6px; flex-wrap:wrap;`;
+
+    // ── Warning badge ──────────────────────────────────────────────────────
     const dupWarn = document.createElement("span");
     dupWarn.style.cssText = `
       display:inline-flex; align-items:center; gap:4px;
       padding:3px 9px; border-radius:6px; font-size:11px; font-weight:600;
       background:rgba(255,165,0,0.15); color:#ffaa33;
       border:1px solid rgba(255,165,0,0.35);
+      cursor:default;
     `;
-    dupWarn.title = "These files have the same name as another file in the scan. They will be renamed with a (1), (2) suffix to avoid overwrites.";
-    dupWarn.innerHTML = `⚠ ${dupCount} duplicate${dupCount > 1 ? "s" : ""}`;
-    leftBtns.appendChild(dupWarn);
+
+    let warnTitle = "";
+    if (exactDups.length > 0 && variantDups.length > 0) {
+      warnTitle = `${exactDups.length} exact duplicate${exactDups.length > 1 ? "s" : ""} (identical name & size) and ${variantDups.length} name collision${variantDups.length > 1 ? "s" : ""} (same name, different size — likely different versions).`;
+    } else if (exactDups.length > 0) {
+      warnTitle = `${exactDups.length} exact duplicate${exactDups.length > 1 ? "s" : ""} found (same filename & file size). Enable "Skip Duplicates" to exclude them from the sort.`;
+    } else {
+      warnTitle = `${variantDups.length} name collision${variantDups.length > 1 ? "s" : ""} — files share a name but have different sizes (likely different versions). They will be renamed with a (1), (2) suffix.`;
+    }
+    dupWarn.title = warnTitle;
+    dupWarn.classList.add("dup-warn-clickable");
+    dupWarn.onclick = () => openDupManager();
+
+    let warnLabel = `⚠ ${dupCount} duplicate${dupCount > 1 ? "s" : ""}`;
+    if (exactDups.length > 0 && variantDups.length > 0) {
+      warnLabel = `⚠ ${exactDups.length} exact · ${variantDups.length} variant`;
+    }
+    dupWarn.textContent = warnLabel;
+    dupWrap.appendChild(dupWarn);
+
+    // ── "Skip exact duplicates" checkbox — only show when exact dups exist ──
+    if (exactDups.length > 0) {
+      const label = document.createElement("label");
+      label.style.cssText = `
+        display:inline-flex; align-items:center; gap:5px;
+        font-size:11px; font-weight:500; color:#ccc;
+        cursor:pointer; user-select:none;
+        padding:3px 8px; border-radius:6px;
+        background:rgba(255,255,255,0.05);
+        border:1px solid rgba(255,255,255,0.1);
+        transition: background 0.15s;
+      `;
+      label.title = `When checked, ${exactDups.length} exact duplicate${exactDups.length > 1 ? "s" : ""} (same name + same file size) will be excluded from the sort. Only the first copy will be kept.`;
+      label.onmouseenter = () => { label.style.background = "rgba(148,0,211,0.18)"; label.style.borderColor = "rgba(148,0,211,0.5)"; };
+      label.onmouseleave = () => { label.style.background = "rgba(255,255,255,0.05)"; label.style.borderColor = "rgba(255,255,255,0.1)"; };
+
+      const cb = document.createElement("input");
+      cb.type    = "checkbox";
+      cb.checked = skipDuplicates;
+      cb.style.cssText = `
+        width:14px; height:14px; cursor:pointer;
+        accent-color: #9400D3;
+      `;
+      cb.onchange = () => {
+        skipDuplicates = cb.checked;
+        // Re-render preview header so the duplicate count updates live
+        renderPreview();
+      };
+
+      const cbText = document.createElement("span");
+      cbText.textContent = "Skip exact duplicates";
+
+      label.appendChild(cb);
+      label.appendChild(cbText);
+      dupWrap.appendChild(label);
+
+      // Live count hint when enabled
+      if (skipDuplicates) {
+        const hint = document.createElement("span");
+        hint.style.cssText = `font-size:10px; color:#888; font-style:italic;`;
+        hint.textContent = `(${exactDups.length} file${exactDups.length > 1 ? "s" : ""} will be skipped)`;
+        dupWrap.appendChild(hint);
+      }
+    }
+
+    leftBtns.appendChild(dupWrap);
   }
 
   // Right: view switcher icons
@@ -1451,9 +2381,13 @@ function renderPreview() {
           tagsWrap.style.cssText = "display:inline-flex; align-items:center; gap:3px; flex-shrink:0;";
           if (preset.isDuplicate) {
             const dupBadge = document.createElement("span");
-            dupBadge.className = "duplicate-badge";
-            dupBadge.textContent = "⚠ DUP";
-            dupBadge.title = "Duplicate filename detected";
+            const isExact  = preset.duplicateType === "exact";
+            const willSkip = isExact && !preset.isKeptCopy && skipDuplicates;
+            dupBadge.className = `duplicate-badge${willSkip ? " dup-skipped" : ""}`;
+            dupBadge.textContent = isExact ? "⚠ DUP" : "⚠ VARIANT";
+            dupBadge.title = isExact
+              ? (willSkip ? "Exact duplicate — will be skipped during sort" : preset.isKeptCopy ? "Exact duplicate — this copy will be kept" : "Exact duplicate (same name & size). Enable 'Skip exact duplicates' to exclude.")
+              : "Same name, different size — likely a different version. Will be renamed with (1), (2) suffix.";
             tagsWrap.appendChild(dupBadge);
           }
           const confP = buildConfidenceBadge(preset.confidence);
@@ -1528,8 +2462,13 @@ function renderPreview() {
         } else {
           if (preset.isDuplicate) {
             const dupBadge = document.createElement("span");
-            dupBadge.className = "duplicate-badge";
-            dupBadge.textContent = "⚠ DUP";
+            const isExact  = preset.duplicateType === "exact";
+            const willSkip = isExact && !preset.isKeptCopy && skipDuplicates;
+            dupBadge.className = `duplicate-badge${willSkip ? " dup-skipped" : ""}`;
+            dupBadge.textContent = isExact ? "⚠ DUP" : "⚠ VARIANT";
+            dupBadge.title = isExact
+              ? (willSkip ? "Exact duplicate — will be skipped during sort" : preset.isKeptCopy ? "Exact duplicate — this copy will be kept" : "Exact duplicate (same name & size). Enable 'Skip exact duplicates' to exclude.")
+              : "Same name, different size — likely a different version.";
             chip.appendChild(dupBadge);
           }
           const confG = buildConfidenceBadge(preset.confidence);
@@ -1608,8 +2547,13 @@ function renderPreview() {
           colTagsC.style.cssText = "display:inline-flex; align-items:center; gap:3px; flex-shrink:0;";
           if (preset.isDuplicate) {
             const dupBadge = document.createElement("span");
-            dupBadge.className = "duplicate-badge";
-            dupBadge.textContent = "⚠ DUP";
+            const isExact  = preset.duplicateType === "exact";
+            const willSkip = isExact && !preset.isKeptCopy && skipDuplicates;
+            dupBadge.className = `duplicate-badge${willSkip ? " dup-skipped" : ""}`;
+            dupBadge.textContent = isExact ? "⚠ DUP" : "⚠ VARIANT";
+            dupBadge.title = isExact
+              ? (willSkip ? "Exact duplicate — will be skipped during sort" : preset.isKeptCopy ? "Exact duplicate — this copy will be kept" : "Exact duplicate (same name & size). Enable 'Skip exact duplicates' to exclude.")
+              : "Same name, different size — likely a different version.";
             colTagsC.appendChild(dupBadge);
           }
           const confC = buildConfidenceBadge(preset.confidence);
@@ -1653,44 +2597,406 @@ function renderPreview() {
   updateSortFolderHint();
 }
 
+// =============================================================================
+// ================= DUPLICATES MANAGER MODAL ==================================
+// =============================================================================
+// State managed entirely within the modal — changes only take effect when
+// the user clicks "Apply & Close". Until then, fullPreviewData is unchanged.
+
+let dupManagerTab = "exact"; // "exact" | "variant"
+// Map from preset.from (file path) → true if the user wants to INCLUDE it in sort
+// Populated fresh each time the modal opens from current fullPreviewData state.
+const dupIncludeMap = new Map();
+// Track files scheduled for permanent deletion (confirmed inside modal)
+const dupDeletedPaths = new Set();
+
+/** Format bytes to human-readable size string */
+function formatBytes(bytes) {
+  if (!bytes) return "—";
+  if (bytes < 1024)       return bytes + " B";
+  if (bytes < 1048576)    return (bytes / 1024).toFixed(1) + " KB";
+  return (bytes / 1048576).toFixed(2) + " MB";
+}
+
+/**
+ * Build duplicate groups from fullPreviewData.
+ * Returns { exact: [ [item, item, ...], ... ], variant: [ [...], ... ] }
+ * Each sub-array is a group of files sharing the same lowercase filename.
+ */
+function buildDupGroups() {
+  const byName = {};
+  for (const item of fullPreviewData) {
+    if (!item.isDuplicate) continue;
+    const key = item.file.toLowerCase();
+    if (!byName[key]) byName[key] = [];
+    byName[key].push(item);
+  }
+
+  const exact = [], variant = [];
+  for (const items of Object.values(byName)) {
+    if (!items.length) continue;
+    const type = items[0].duplicateType;
+    if (type === "exact") exact.push(items);
+    else variant.push(items);
+  }
+
+  // Sort groups alphabetically by filename
+  exact.sort((a, b) => a[0].file.localeCompare(b[0].file));
+  variant.sort((a, b) => a[0].file.localeCompare(b[0].file));
+  return { exact, variant };
+}
+
+/** Open the Duplicates Manager modal */
+function openDupManager() {
+  const overlay = document.getElementById("dupManagerOverlay");
+  if (!overlay) return;
+
+  // Initialise include map: default = include all (except non-kept exact dups if skipDuplicates)
+  dupIncludeMap.clear();
+  dupDeletedPaths.clear();
+  for (const item of fullPreviewData) {
+    if (!item.isDuplicate) continue;
+    // Default: if skipDuplicates is on, non-kept exact dups start unchecked
+    const defaultInclude = !(skipDuplicates && item.duplicateType === "exact" && !item.isKeptCopy);
+    dupIncludeMap.set(item.from, defaultInclude);
+  }
+
+  dupManagerTab = "exact";
+  overlay.classList.add("visible");
+  overlay.onclick = (e) => { if (e.target === overlay) closeDupManager(); };
+  document._dupEscHandler = (e) => { if (e.key === "Escape") closeDupManager(); };
+  document.addEventListener("keydown", document._dupEscHandler);
+
+  renderDupManager();
+}
+
+function closeDupManager() {
+  const overlay = document.getElementById("dupManagerOverlay");
+  if (overlay) overlay.classList.remove("visible");
+  if (document._dupEscHandler) {
+    document.removeEventListener("keydown", document._dupEscHandler);
+    delete document._dupEscHandler;
+  }
+}
+
+/** Apply the modal's include/exclude choices back into fullPreviewData, then re-render preview */
+function applyDupManagerSelections() {
+  // Remove permanently-deleted files from fullPreviewData
+  if (dupDeletedPaths.size > 0) {
+    fullPreviewData = fullPreviewData.filter(p => !dupDeletedPaths.has(p.from));
+  }
+
+  // Sync include/exclude selections: items marked excluded get flagged so
+  // dataToSort (in startSort) can honour them. We reuse isDuplicate + a new
+  // manuallyExcluded flag rather than mutating isDuplicate semantics.
+  for (const item of fullPreviewData) {
+    if (!item.isDuplicate) continue;
+    const include = dupIncludeMap.get(item.from);
+    item.manuallyExcluded = (include === false);
+  }
+
+  // Also keep skipDuplicates in sync: if user has individually deselected any exact dup,
+  // make sure startSort respects manuallyExcluded regardless of the checkbox
+  closeDupManager();
+
+  // Re-run applyFilter so filteredPreviewData reflects deletions & exclusions
+  applyFilter();
+}
+
+/** Render tabs, toolbar and file groups inside the modal */
+function renderDupManager() {
+  const groups = buildDupGroups();
+  const subEl     = document.getElementById("dupManagerSub");
+  const tabsEl    = document.getElementById("dupManagerTabs");
+  const toolbarEl = document.getElementById("dupManagerToolbar");
+  const bodyEl    = document.getElementById("dupManagerBody");
+
+  if (!subEl || !tabsEl || !toolbarEl || !bodyEl) return;
+
+  const totalExact   = groups.exact.reduce((s, g) => s + g.length, 0);
+  const totalVariant = groups.variant.reduce((s, g) => s + g.length, 0);
+
+  subEl.textContent = `${totalExact} exact duplicate${totalExact !== 1 ? "s" : ""} · ${totalVariant} name collision${totalVariant !== 1 ? "s" : ""}`;
+
+  // ── Tabs ──────────────────────────────────────────────────────────────────
+  tabsEl.innerHTML = "";
+
+  [
+    { id: "exact",   label: `⚠ Exact Duplicates (${groups.exact.length} group${groups.exact.length !== 1 ? "s" : ""})` },
+    { id: "variant", label: `⇄ Name Collisions (${groups.variant.length} group${groups.variant.length !== 1 ? "s" : ""})` },
+  ].forEach(t => {
+    const btn = document.createElement("button");
+    btn.className = `dup-tab${dupManagerTab === t.id ? " active" : ""}`;
+    btn.textContent = t.label;
+    btn.onclick = () => { dupManagerTab = t.id; renderDupManager(); };
+    tabsEl.appendChild(btn);
+  });
+
+  // ── Toolbar ───────────────────────────────────────────────────────────────
+  toolbarEl.innerHTML = "";
+  const currentGroups = groups[dupManagerTab] || [];
+  const currentItems  = currentGroups.flat().filter(p => !dupDeletedPaths.has(p.from));
+
+  // Select / Deselect all
+  const selAllBtn = document.createElement("button");
+  selAllBtn.className = "dup-toolbar-btn";
+  selAllBtn.textContent = "✓ Include All";
+  selAllBtn.onclick = () => {
+    currentItems.forEach(p => dupIncludeMap.set(p.from, true));
+    renderDupManager();
+  };
+  toolbarEl.appendChild(selAllBtn);
+
+  const deselAllBtn = document.createElement("button");
+  deselAllBtn.className = "dup-toolbar-btn";
+  deselAllBtn.textContent = "✕ Exclude All";
+  deselAllBtn.onclick = () => {
+    currentItems.forEach(p => dupIncludeMap.set(p.from, false));
+    renderDupManager();
+  };
+  toolbarEl.appendChild(deselAllBtn);
+
+  if (dupManagerTab === "exact") {
+    const sep1 = document.createElement("div"); sep1.className = "dup-toolbar-sep"; toolbarEl.appendChild(sep1);
+
+    // Keep first of each group
+    const keepFirstBtn = document.createElement("button");
+    keepFirstBtn.className = "dup-toolbar-btn";
+    keepFirstBtn.title = "For each duplicate group, include the first copy and exclude all others";
+    keepFirstBtn.textContent = "Keep First Copy";
+    keepFirstBtn.onclick = () => {
+      currentGroups.forEach(group => {
+        group.filter(p => !dupDeletedPaths.has(p.from)).forEach((p, idx) => {
+          dupIncludeMap.set(p.from, idx === 0);
+        });
+      });
+      renderDupManager();
+    };
+    toolbarEl.appendChild(keepFirstBtn);
+
+    const sep2 = document.createElement("div"); sep2.className = "dup-toolbar-sep"; toolbarEl.appendChild(sep2);
+
+    // Delete all non-kept
+    const delExtraBtn = document.createElement("button");
+    delExtraBtn.className = "dup-toolbar-btn danger";
+    delExtraBtn.title = "Permanently delete all copies except the first in each group";
+    delExtraBtn.textContent = "🗑 Delete Extras";
+    delExtraBtn.onclick = async () => {
+      const toDelete = currentGroups.flatMap(group =>
+        group.filter(p => !dupDeletedPaths.has(p.from)).filter((_, idx) => idx > 0)
+      );
+      if (!toDelete.length) return;
+      if (!confirm(`Permanently delete ${toDelete.length} file${toDelete.length > 1 ? "s" : ""}? This cannot be undone.`)) return;
+      for (const p of toDelete) {
+        const res = await window.api.deleteFile(p.from);
+        if (res.success) {
+          dupDeletedPaths.add(p.from);
+          dupIncludeMap.delete(p.from);
+        }
+      }
+      renderDupManager();
+    };
+    toolbarEl.appendChild(delExtraBtn);
+  }
+
+  // Selected count chip (right-aligned)
+  const includedCount = currentItems.filter(p => dupIncludeMap.get(p.from) !== false).length;
+  const countChip = document.createElement("span");
+  countChip.className = "dup-selected-count";
+  countChip.textContent = `${includedCount} / ${currentItems.length} included in sort`;
+  toolbarEl.appendChild(countChip);
+
+  // ── Body: group cards ─────────────────────────────────────────────────────
+  bodyEl.innerHTML = "";
+
+  if (currentGroups.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "dup-empty";
+    empty.textContent = dupManagerTab === "exact"
+      ? "No exact duplicates found in this scan."
+      : "No name collisions found — all filenames are unique.";
+    bodyEl.appendChild(empty);
+    return;
+  }
+
+  currentGroups.forEach(group => {
+    const liveGroup = group.filter(p => !dupDeletedPaths.has(p.from));
+    if (!liveGroup.length) return; // all deleted from this group
+
+    const card = document.createElement("div");
+    card.className = "dup-group";
+
+    // Group header
+    const header = document.createElement("div");
+    header.className = "dup-group-header";
+
+    const nameEl = document.createElement("span");
+    nameEl.className = "dup-group-name";
+    nameEl.title = group[0].file;
+    nameEl.textContent = group[0].file;
+    header.appendChild(nameEl);
+
+    const countEl = document.createElement("span");
+    countEl.style.cssText = "font-size:10px; color:var(--text-dim); flex-shrink:0;";
+    countEl.textContent = `${liveGroup.length} cop${liveGroup.length !== 1 ? "ies" : "y"}`;
+    header.appendChild(countEl);
+
+    const typeBadge = document.createElement("span");
+    typeBadge.className = `dup-group-type-badge ${dupManagerTab}`;
+    typeBadge.textContent = dupManagerTab === "exact" ? "EXACT" : "VARIANT";
+    header.appendChild(typeBadge);
+
+    card.appendChild(header);
+
+    // File rows
+    liveGroup.forEach((item, idx) => {
+      const row = document.createElement("div");
+      row.className = "dup-file-row";
+      const isIncluded = dupIncludeMap.get(item.from) !== false;
+      if (!isIncluded) row.classList.add("excluded");
+
+      // Checkbox
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.className = "dup-file-check";
+      cb.checked = isIncluded;
+      cb.title = isIncluded ? "Click to exclude from sort" : "Click to include in sort";
+      cb.onchange = () => {
+        dupIncludeMap.set(item.from, cb.checked);
+        row.classList.toggle("excluded", !cb.checked);
+        // Update count chip
+        const live2 = currentGroups.flat().filter(p => !dupDeletedPaths.has(p.from));
+        const inc2  = live2.filter(p => dupIncludeMap.get(p.from) !== false).length;
+        countChip.textContent = `${inc2} / ${live2.length} included in sort`;
+      };
+      row.appendChild(cb);
+
+      // File info
+      const info = document.createElement("div");
+      info.className = "dup-file-info";
+
+      const nameSpan = document.createElement("div");
+      nameSpan.className = "dup-file-name";
+      nameSpan.textContent = item.file;
+      info.appendChild(nameSpan);
+
+      const pathSpan = document.createElement("div");
+      pathSpan.className = "dup-file-path";
+      pathSpan.textContent = item.from;
+      pathSpan.title = item.from;
+      info.appendChild(pathSpan);
+
+      row.appendChild(info);
+
+      // File size
+      const sizeEl = document.createElement("div");
+      sizeEl.className = "dup-file-size";
+      sizeEl.textContent = formatBytes(item.size);
+      row.appendChild(sizeEl);
+
+      // KEPT badge (first in exact group)
+      if (dupManagerTab === "exact" && idx === 0) {
+        const keptBadge = document.createElement("span");
+        keptBadge.className = "dup-kept-badge";
+        keptBadge.textContent = "FIRST";
+        keptBadge.title = "First occurrence — will be kept by default";
+        row.appendChild(keptBadge);
+      }
+
+      // Action buttons
+      const actions = document.createElement("div");
+      actions.className = "dup-file-actions";
+
+      const locateBtn = document.createElement("button");
+      locateBtn.className = "dup-action-btn locate";
+      locateBtn.textContent = "📂 Locate";
+      locateBtn.title = "Show this file in Windows Explorer";
+      locateBtn.onclick = () => window.api.showInFolder(item.from);
+      actions.appendChild(locateBtn);
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.className = "dup-action-btn delete-btn";
+      deleteBtn.textContent = "🗑 Delete";
+      deleteBtn.title = "Permanently delete this file from disk";
+      deleteBtn.onclick = async () => {
+        if (!confirm(`Permanently delete:\n${item.from}\n\nThis cannot be undone.`)) return;
+        const res = await window.api.deleteFile(item.from);
+        if (res.success) {
+          dupDeletedPaths.add(item.from);
+          dupIncludeMap.delete(item.from);
+          renderDupManager();
+        } else {
+          alert(`Could not delete file:\n${res.error}`);
+        }
+      };
+      actions.appendChild(deleteBtn);
+
+      row.appendChild(actions);
+      card.appendChild(row);
+    });
+
+    bodyEl.appendChild(card);
+  });
+}
+
 // ================= START SORT =================
 async function startSort() {
   if (!filteredPreviewData.length || isSorting) return;
 
   isSorting = true;
-  statusText.innerText = "Sorting...";
   progressFill.style.width = "0%";
 
-  window.api.onProgress(val => { progressFill.style.width = val + "%"; });
+  // Exclude files based on:
+  // 1. skipDuplicates checkbox (auto-excludes non-kept exact dups)
+  // 2. manuallyExcluded flag set by the Duplicates Manager modal
+  const dataToSort = filteredPreviewData.filter(p => {
+    if (p.manuallyExcluded) return false;
+    if (skipDuplicates && p.isDuplicate && p.duplicateType === "exact" && !p.isKeptCopy) return false;
+    return true;
+  });
+
+  // Show the sort animation
+  showSortingAnimation(dataToSort.length);
+  statusText.innerText = `Sorting ${dataToSort.length} files…`;
+  _etaStartTime = Date.now();
+
+  window.api.onProgress(val => {
+    progressFill.style.width = val + "%";
+    const eta = calcETA(val);
+    if (eta) statusText.innerText = `Sorting ${dataToSort.length} files…  |  ${eta}`;
+    updateSortProgress(val, eta);
+  });
 
   try {
     let result;
     if (appMode === "sample") {
       result = await window.api.sampleExecute(
         currentFolder,
-        filteredPreviewData,
+        dataToSort,
         { mode: keyFilter.mode, notes: [...keyFilter.notes] },
         { min: bpmRange.min, max: bpmRange.max }
       );
     } else {
       result = await window.api.execute(
         currentFolder,
-        filteredPreviewData,
+        dataToSort,
         { mode: keyFilter.mode, notes: [...keyFilter.notes] },
         { min: bpmRange.min, max: bpmRange.max }
       );
     }
-    // Handle both old (number) and new ({ count, newFolders }) return format
     const count = (typeof result === "object") ? result.count : result;
     const newFolders = (typeof result === "object") ? result.newFolders : [];
     isSorting = false;
+    stopSortAnimation();
     progressFill.style.width = "100%";
     showSortedState(count, newFolders);
   } catch (err) {
     console.error("Sort failed:", err);
     isSorting = false;
+    stopSortAnimation();
     progressFill.style.width = "0%";
     statusText.innerText = "Sort failed. Please try again.";
+    showEmptyState("Sort failed. Please try again.");
   }
 }
 
@@ -1723,15 +3029,34 @@ function confirmUndo() {
 
 // ================= UNDO =================
 async function undo() {
-  if (isSorting) return;
+  if (isSorting || isAnalyzing) return;
+
+  // Show the undo animation immediately — before the async IPC call
+  showUndoAnimation();
+  statusText.innerText = "Restoring files…";
+  progressFill.style.width = "0%";
+  _etaStartTime = Date.now();
+
+  // Live elapsed-time ticker (undo has no progress events)
+  const _undoElapsedTimer = setInterval(() => {
+    const sec = Math.floor((Date.now() - _etaStartTime) / 1000);
+    statusText.innerText = `Restoring files… (${sec}s)`;
+    const subEl = document.querySelector(".undo-sub-text");
+    if (subEl) subEl.textContent = `Moving files back and removing empty folders… (${sec}s elapsed)`;
+  }, 1000);
 
   const result = appMode === "sample"
     ? await window.api.sampleUndo()
     : await window.api.undo();
 
+  clearInterval(_undoElapsedTimer);
+  stopUndoAnimation();
   const { count, sourceFolder } = result;
 
-  if (count === 0) { showEmptyState("Nothing to undo."); return; }
+  if (count === 0) {
+    showEmptyState("Nothing to undo.");
+    return;
+  }
 
   progressFill.style.width = "0%";
   currentFolder = sourceFolder;
@@ -1744,6 +3069,9 @@ function resetSession() {
   fullPreviewData = [];
   filteredPreviewData = [];
   isSorting = false;
+  skipDuplicates = false;
+  dupIncludeMap.clear();
+  dupDeletedPaths.clear();
   keyFilter = { mode: "all", notes: new Set() };
   bpmRange = { min: 0, max: 300 };
   progressFill.style.width = "0%";

@@ -23,6 +23,9 @@ let isAnalyzing = false; // Blocks all folder interactions during scan
 let bpmRange = { min: 0, max: 300 }; // BPM slider range
 let skipDuplicates = false; // When true, exact duplicates (same name+size) are excluded from sort
 
+// ETA tracking
+let _etaStartTime = null;
+
 // ================= THEME =================
 let isDarkTheme = true; // default dark
 
@@ -150,9 +153,11 @@ function renderKeyFilterBar() {
   // ── IMPORTANT: collect keys from BPM-filtered data only ──────────────────
   // We apply the BPM filter manually here (same logic as applyFilter but key-agnostic)
   // so the note buttons only show keys that exist within the current BPM range.
+  const bpmIsFiltered = bpmRange.min > 0 || bpmRange.max < 300;
   const bpmFilteredData = fullPreviewData.filter(p => {
     const bpmRaw = parseFloat(p.metadata?.bpm || 0);
-    if (bpmRaw <= 0) return true; // no bpm data — always include for key scanning
+    if (!bpmIsFiltered) return true; // no active BPM filter — include all
+    if (bpmRaw <= 0) return false;   // no BPM data → excluded when filter is active
     const bpmInt = Math.round(bpmRaw);
     return bpmInt >= bpmRange.min && bpmInt <= bpmRange.max;
   });
@@ -297,6 +302,24 @@ function updateBpmRangeDisplay() {
 
   // Always update the folder hint when BPM changes
   updateSortFolderHint();
+}
+
+// ── ETA helpers ───────────────────────────────────────────────────────────────
+function formatETA(ms) {
+  if (!isFinite(ms) || ms <= 0) return "";
+  const sec = Math.ceil(ms / 1000);
+  if (sec < 5)  return "almost done…";
+  if (sec < 60) return `~${sec}s remaining`;
+  const min = Math.floor(sec / 60);
+  const s   = sec % 60;
+  return s === 0 ? `~${min}m remaining` : `~${min}m ${s}s remaining`;
+}
+
+function calcETA(pct) {
+  if (!_etaStartTime || pct <= 0) return "";
+  const elapsed = Date.now() - _etaStartTime;
+  const total   = elapsed / (pct / 100);
+  return formatETA(total - elapsed);
 }
 
 // ── BPM slider debounce ───────────────────────────────────────────────────────
@@ -611,8 +634,10 @@ function showAnalyzingState(modeLabel) {
 
   // Dim the Select Folder button to signal it's disabled
   const sfBtn = document.querySelector("button[onclick*='selectFolder'], button[onclick*='selectFolder']");
-  document.querySelectorAll(".header button").forEach(b => {
-    if (b.textContent.includes("Select Folder")) {
+  document.querySelectorAll(".toolbar button, .header button").forEach(b => {
+    const txt = b.textContent.trim();
+    if (txt.includes("Select Folder") || txt.includes("Start Sort") || txt.includes("Undo")) {
+      b.disabled = true;
       b.style.opacity = "0.4";
       b.style.pointerEvents = "none";
       b.style.cursor = "not-allowed";
@@ -724,9 +749,10 @@ function stopAnalyzingState() {
     _analyzeAnimFrame = null;
   }
   previewDiv.classList.remove("is-analyzing");
-  // Restore Select Folder button
-  document.querySelectorAll(".header button").forEach(b => {
+  // Restore all disabled toolbar buttons
+  document.querySelectorAll(".toolbar button, .header button").forEach(b => {
     if (b.dataset._analyzingDisabled) {
+      b.disabled = false;
       b.style.opacity = "";
       b.style.pointerEvents = "";
       b.style.cursor = "";
@@ -1008,14 +1034,14 @@ function showSortingAnimation(totalCount) {
   _startSortCanvas(canvas);
 }
 
-function updateSortProgress(val) {
+function updateSortProgress(val, eta) {
   _sortProgressVal = val;
   const p = document.getElementById("sortPctText");
   const b = document.getElementById("sortMiniBar");
   const s = document.getElementById("sortSubText");
   if (p) p.textContent = val + "%";
   if (b) b.style.width  = val + "%";
-  if (s && val > 0) s.textContent = `${val}% complete…`;
+  if (s && val > 0) s.textContent = eta ? `${val}% complete  —  ${eta}` : `${val}% complete…`;
 }
 
 function stopSortAnimation() {
@@ -1214,6 +1240,7 @@ function showUndoAnimation() {
   titleEl.textContent = "Restoring original locations…";
 
   const subEl = document.createElement("div");
+  subEl.className = "undo-sub-text";
   subEl.style.cssText = "font-size:12px;color:rgba(200,160,255,0.75);";
   subEl.textContent = "Moving files back and removing empty folders";
 
@@ -1819,6 +1846,7 @@ async function selectFolder() {
 
 async function runPreview(folder) {
   isAnalyzing = true;
+  _etaStartTime = Date.now();
   const modeLabel = appMode === "sample" ? "samples" : "presets";
 
   // Show the animated analyzing canvas — replaces empty state or any prior content
@@ -1828,8 +1856,9 @@ async function runPreview(folder) {
 
   window.api.onAnalyzeProgress(val => {
     progressFill.style.width = val + "%";
-    statusText.innerText = `Analyzing ${modeLabel}… ${val}%`;
-    updateAnalyzingProgress(val, `${val}% — scanning files…`);
+    const eta = calcETA(val);
+    statusText.innerText = `Analyzing ${modeLabel}… ${val}%${eta ? "  |  " + eta : ""}`;
+    updateAnalyzingProgress(val, `${val}% — scanning files…${eta ? "  " + eta : ""}`);
   });
 
   try {
@@ -1887,10 +1916,14 @@ function applyFilter() {
         // BPM range filter (works for both modes if bpm data available)
         // Round to integer — BPM metadata is often stored as float (e.g. 112.9)
         // and we want "112 BPM" displayed files to match a 112–112 range exactly.
+        // When the user has set a non-default BPM range, files with NO BPM data
+        // are also excluded — they can't be confirmed to be in the requested range.
         const bpmRaw = parseFloat(
           (appMode === "sample" ? item.metadata?.bpm : item.intelligence?.bpm) || 0
         );
-        if (bpmRaw > 0) {
+        const bpmIsFiltered = bpmRange.min > 0 || bpmRange.max < 300;
+        if (bpmIsFiltered) {
+          if (bpmRaw <= 0) return false; // no BPM data → exclude when a range is active
           const bpmInt = Math.round(bpmRaw);
           if (bpmInt < bpmRange.min || bpmInt > bpmRange.max) return false;
         }
@@ -2925,10 +2958,13 @@ async function startSort() {
   // Show the sort animation
   showSortingAnimation(dataToSort.length);
   statusText.innerText = `Sorting ${dataToSort.length} files…`;
+  _etaStartTime = Date.now();
 
   window.api.onProgress(val => {
     progressFill.style.width = val + "%";
-    updateSortProgress(val);
+    const eta = calcETA(val);
+    if (eta) statusText.innerText = `Sorting ${dataToSort.length} files…  |  ${eta}`;
+    updateSortProgress(val, eta);
   });
 
   try {
@@ -2999,11 +3035,21 @@ async function undo() {
   showUndoAnimation();
   statusText.innerText = "Restoring files…";
   progressFill.style.width = "0%";
+  _etaStartTime = Date.now();
+
+  // Live elapsed-time ticker (undo has no progress events)
+  const _undoElapsedTimer = setInterval(() => {
+    const sec = Math.floor((Date.now() - _etaStartTime) / 1000);
+    statusText.innerText = `Restoring files… (${sec}s)`;
+    const subEl = document.querySelector(".undo-sub-text");
+    if (subEl) subEl.textContent = `Moving files back and removing empty folders… (${sec}s elapsed)`;
+  }, 1000);
 
   const result = appMode === "sample"
     ? await window.api.sampleUndo()
     : await window.api.undo();
 
+  clearInterval(_undoElapsedTimer);
   stopUndoAnimation();
   const { count, sourceFolder } = result;
 

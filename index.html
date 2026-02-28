@@ -2061,8 +2061,8 @@
       <div class="toolbar">
         <button id="themeToggleBtn" onclick="toggleTheme()" title="Toggle light/dark theme">☀️</button>
         <button onclick="selectFolder()">Select Folder</button>
-        <button onclick="startSort()">Start Sort</button>
-        <button onclick="undo()">Undo</button>
+        <button id="sortBtn" onclick="startSort()">Start Sort</button>
+        <button id="undoBtn" onclick="showUndoConfirm()">Undo</button>
         <button onclick="resetSession()">New Session</button>
       </div>
     </div>
@@ -2180,8 +2180,10 @@
               <input type="range" id="bpmMin" min="0" max="300" value="0" step="1"
                 oninput="
                   let v=parseInt(this.value);
-                  if(v<0)v=0; if(v>300)v=300;
+                  if(isNaN(v)||v<0)v=0;
                   if(v>bpmRange.max)v=bpmRange.max;
+                  if(v>300)v=300;
+                  this.value=v;
                   bpmRange.min=v;
                   const mi=document.getElementById('bpmMinInput');
                   if(mi)mi.value=v;
@@ -2190,8 +2192,10 @@
               <input type="range" id="bpmMax" min="0" max="300" value="300" step="1"
                 oninput="
                   let v=parseInt(this.value);
-                  if(v<0)v=0; if(v>300)v=300;
+                  if(isNaN(v)||v<0)v=0;
                   if(v<bpmRange.min)v=bpmRange.min;
+                  if(v>300)v=300;
+                  this.value=v;
                   bpmRange.max=v;
                   const ma=document.getElementById('bpmMaxInput');
                   if(ma)ma.value=v;
