@@ -23,6 +23,8 @@ let isAnalyzing = false; // Blocks all folder interactions during scan
 let _analysisCancelled = false; // Set to true when user cancels during analysis
 let bpmRange = { min: 0, max: 300 }; // BPM slider range
 let skipDuplicates = false; // When true, exact duplicates (same name+size) are excluded from sort
+let previewSearchQuery = ""; // Smart search query string for the preview pane
+let _previewSearchTimer = null; // Debounce timer for search input
 
 // ETA tracking
 let _etaStartTime = null;
@@ -845,6 +847,10 @@ function clearPreviewInteractivity() {
 // ================= EMPTY STATE =================
 function showEmptyState(message = "Ready") {
   previewDiv.innerHTML = "";
+
+  // Hide search bar when there's no data
+  const sb = document.getElementById("previewSearchBar");
+  if (sb) sb.style.display = "none";
 
   // The whole preview box becomes a clickable drop zone
   previewDiv.style.cursor = "pointer";
@@ -2228,6 +2234,148 @@ function getEnabledCategories() {
 }
 
 // ================= FILTER =================
+// ================= SMART SEARCH =================
+// Parses natural language queries like:
+//   "128 bpm"  |  "128 bpm a min"  |  "138 bpm c drum loop"
+//   "a minor"  |  "c# major"  |  "loop"  |  "one shot"  |  "dark pad"
+// Returns a structured { bpm, key, minor, major, terms[] } object.
+function parseSmartSearch(raw) {
+  const q = raw.trim().toLowerCase();
+  const result = { bpm: null, bpmTolerance: 2, key: null, minor: null, major: null, terms: [] };
+  if (!q) return result;
+
+  let working = q;
+
+  // ── BPM: "128bpm" | "128 bpm" | "bpm128" ─────────────────────────────────
+  working = working.replace(/(?:(\d{2,3})\s*bpm|bpm\s*(\d{2,3}))/gi, (_, a, b) => {
+    result.bpm = parseInt(a || b);
+    return " ";
+  });
+  // Bare number: treat as BPM only if >=40 and <=300 and no BPM parsed yet
+  working = working.replace(/\b(\d{2,3})\b/g, (_, n) => {
+    const v = parseInt(n);
+    if (!result.bpm && v >= 40 && v <= 300) { result.bpm = v; return " "; }
+    return n;
+  });
+
+  // ── Key + mode: "a min" | "c# major" | "am" | "f#m" | "bb minor" ─────────
+  // Full-word "min"/"minor" / "maj"/"major" after a note letter
+  working = working.replace(
+    /\b([a-g](?:#|b)?)\s*(m(?:in(?:or)?)?|maj(?:or)?)\b/gi,
+    (_, note, mode) => {
+      result.key = note[0].toUpperCase() + (note.slice(1) || "");
+      if (/^m(?:in)?/.test(mode.toLowerCase())) result.minor = true;
+      else result.major = true;
+      return " ";
+    }
+  );
+  // Shorthand with trailing "m": "am" "c#m" "f#m" — only when not preceded by more letters
+  if (!result.key) {
+    working = working.replace(/\b([a-g](?:#|b)?)m\b/gi, (_, note) => {
+      result.key = note[0].toUpperCase() + (note.slice(1) || "");
+      result.minor = true;
+      return " ";
+    });
+  }
+  // Bare note with no mode — just key filter
+  if (!result.key) {
+    working = working.replace(/\b([a-g](?:#|b)?)\b/gi, (_, note) => {
+      result.key = note[0].toUpperCase() + (note.slice(1) || "");
+      return " ";
+    });
+  }
+
+  // ── Leftover "minor" / "major" words (without a note) ─────────────────────
+  working = working.replace(/\bminor\b/gi, () => { if (result.minor === null) result.minor = true;  return " "; });
+  working = working.replace(/\bmajor\b/gi, () => { if (result.major === null) result.major = true;  return " "; });
+  working = working.replace(/\bmin\b/gi,   () => { if (result.minor === null) result.minor = true;  return " "; });
+  working = working.replace(/\bmaj\b/gi,   () => { if (result.major === null) result.major = true;  return " "; });
+
+  // ── Remaining words → free-text terms ─────────────────────────────────────
+  result.terms = working.split(/\s+/).map(t => t.trim()).filter(t => t.length > 1);
+
+  return result;
+}
+
+// Tests a single preview item against the parsed search token set.
+function matchesSmartSearch(item, parsed) {
+  // ── BPM match (±tolerance) ─────────────────────────────────────────────────
+  if (parsed.bpm !== null) {
+    const rawBpm = parseFloat(
+      (appMode === "sample" ? item.metadata?.bpm : item.intelligence?.bpm) || 0
+    );
+    if (rawBpm <= 0) return false; // no BPM data → exclude
+    const diff = Math.abs(Math.round(rawBpm) - parsed.bpm);
+    if (diff > parsed.bpmTolerance) return false;
+  }
+
+  // ── Key match ──────────────────────────────────────────────────────────────
+  if (parsed.key !== null) {
+    const rawKey = (
+      appMode === "sample" ? (item.metadata?.key || "") : (item.intelligence?.key || "")
+    ).trim();
+    if (!rawKey) return false;
+    const normKey = rawKey[0].toUpperCase() + rawKey.slice(1).toLowerCase();
+    // Strip trailing 'm' for note comparison
+    const itemNote = normKey.replace(/m$/, "");
+    const searchNote = parsed.key.replace(/b$/, "♭"); // normalise 'b' flat indicator
+    // Simple string compare on base note (handles C, C#, Bb etc.)
+    const parsedNote = parsed.key[0].toUpperCase() + (parsed.key.slice(1) || "");
+    if (!itemNote.toUpperCase().startsWith(parsedNote.toUpperCase())) return false;
+  }
+
+  // ── Mode match (minor/major) ───────────────────────────────────────────────
+  if (parsed.minor === true || parsed.major === true) {
+    const rawKey = (
+      appMode === "sample" ? (item.metadata?.key || "") : (item.intelligence?.key || "")
+    ).trim();
+    const mood = (
+      appMode === "sample" ? (item.metadata?.mood || "") : (item.intelligence?.mood || "")
+    ).trim().toLowerCase();
+    const normKey = rawKey ? rawKey[0].toUpperCase() + rawKey.slice(1).toLowerCase() : "";
+    const isMinor = normKey.endsWith("m") || mood === "minor";
+    if (parsed.minor === true  && !isMinor) return false;
+    if (parsed.major === true  &&  isMinor) return false;
+  }
+
+  // ── Free-text terms: match against filename, category, metadata ────────────
+  if (parsed.terms.length > 0) {
+    // Build a single searchable string for the item
+    const haystack = [
+      item.file || "",
+      item.category || "",
+      item.sampleType || "",
+      item.metadata?.mood || "",
+      item.intelligence?.mood || "",
+      item.synth || "",
+    ].join(" ").toLowerCase();
+
+    for (const term of parsed.terms) {
+      if (!haystack.includes(term)) return false;
+    }
+  }
+
+  return true;
+}
+
+// Called by the search input — debounced so we don't re-render on every keystroke
+function onPreviewSearch(value) {
+  previewSearchQuery = value;
+  if (_previewSearchTimer !== null) clearTimeout(_previewSearchTimer);
+  _previewSearchTimer = setTimeout(() => {
+    _previewSearchTimer = null;
+    applyFilter();
+  }, 150);
+}
+
+// Clears the search box and resets the query
+function clearPreviewSearch() {
+  previewSearchQuery = "";
+  const inp = document.getElementById("previewSearchInput");
+  if (inp) inp.value = "";
+  applyFilter();
+}
+
 function applyFilter() {
   const enabled = getEnabledCategories();
 
@@ -2278,6 +2426,12 @@ function applyFilter() {
             }
             if (!matched) return false;
           }
+        }
+
+        // ── Smart search (preview pane search bar) ─────────────────────────
+        if (previewSearchQuery.trim()) {
+          const parsed = parseSmartSearch(previewSearchQuery);
+          if (!matchesSmartSearch(item, parsed)) return false;
         }
 
         return true;
@@ -2552,6 +2706,36 @@ function getDisplayFolderName(category) {
 function renderPreview() {
   clearPreviewInteractivity();
   previewDiv.innerHTML = "";
+
+  // ── Show/hide search bar based on data availability ───────────────────────
+  const searchBar = document.getElementById("previewSearchBar");
+  if (searchBar) {
+    searchBar.style.display = fullPreviewData.length > 0 ? "block" : "none";
+  }
+
+  // ── Update clear button visibility ────────────────────────────────────────
+  const clearBtn = document.getElementById("previewSearchClearBtn");
+  if (clearBtn) clearBtn.style.display = previewSearchQuery.trim() ? "inline-block" : "none";
+
+  // ── Update search hint text ───────────────────────────────────────────────
+  const hintEl = document.getElementById("previewSearchHint");
+  if (hintEl) {
+    if (previewSearchQuery.trim()) {
+      const parsed = parseSmartSearch(previewSearchQuery);
+      const total  = fullPreviewData.length;
+      const shown  = filteredPreviewData.length;
+      const tokens = [];
+      if (parsed.bpm !== null)    tokens.push(`<span class="sh-token">BPM ${parsed.bpm}±${parsed.bpmTolerance}</span>`);
+      if (parsed.key !== null)    tokens.push(`<span class="sh-token">Key ${parsed.key}${parsed.minor ? "m" : parsed.major ? " maj" : ""}</span>`);
+      else if (parsed.minor)      tokens.push(`<span class="sh-token">Minor</span>`);
+      else if (parsed.major)      tokens.push(`<span class="sh-token">Major</span>`);
+      parsed.terms.forEach(t =>  tokens.push(`<span class="sh-token">"${t}"</span>`));
+      const tokenStr = tokens.length ? `  ·  ${tokens.join("  ")}` : "";
+      hintEl.innerHTML = `<span class="sh-match">${shown}</span> of ${total} files${tokenStr}`;
+    } else {
+      hintEl.innerHTML = "";
+    }
+  }
 
   if (!filteredPreviewData.length) return;
 
@@ -3547,6 +3731,9 @@ function _doResetSession() {
   dupDeletedPaths.clear();
   keyFilter = { mode: "all", notes: new Set() };
   bpmRange = { min: 0, max: 300 };
+  previewSearchQuery = "";
+  const searchInp = document.getElementById("previewSearchInput");
+  if (searchInp) searchInp.value = "";
   progressFill.style.width = "0%";
   const bar = document.getElementById("keyFilterBar");
   if (bar) bar.style.display = "none";

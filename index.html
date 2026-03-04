@@ -1208,6 +1208,86 @@
       flex-shrink: 0;
     }
 
+    /* ================= PREVIEW SEARCH BAR ================= */
+    .preview-search-bar {
+      flex-shrink: 0;
+      padding: 8px 12px 6px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(148, 0, 211, 0.04);
+    }
+
+    .preview-search-inner {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--bg-input, rgba(255,255,255,0.06));
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 5px 10px;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+
+    .preview-search-inner:focus-within {
+      border-color: var(--primary, #9400D3);
+      box-shadow: 0 0 0 2px rgba(148, 0, 211, 0.18);
+    }
+
+    .preview-search-icon {
+      font-size: 13px;
+      opacity: 0.55;
+      flex-shrink: 0;
+      user-select: none;
+    }
+
+    .preview-search-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text);
+      font-size: 12.5px;
+      font-family: inherit;
+      min-width: 0;
+    }
+
+    .preview-search-input::placeholder {
+      color: #666;
+      font-style: italic;
+    }
+
+    .preview-search-clear {
+      background: transparent;
+      border: none;
+      color: #888;
+      cursor: pointer;
+      font-size: 12px;
+      padding: 0 2px;
+      line-height: 1;
+      border-radius: 4px;
+      transition: color 0.12s;
+      flex-shrink: 0;
+    }
+
+    .preview-search-clear:hover { color: #fff; }
+
+    .preview-search-hint {
+      font-size: 10.5px;
+      color: #666;
+      margin-top: 4px;
+      min-height: 14px;
+      font-style: italic;
+      padding: 0 2px;
+    }
+
+    .preview-search-hint .sh-match  { color: var(--primary, #9400D3); font-weight: 600; font-style: normal; }
+    .preview-search-hint .sh-token  { color: #9c9; font-style: normal; }
+    .preview-search-hint .sh-warn   { color: #fa3; font-style: normal; }
+
+    [data-theme="light"] .preview-search-inner {
+      background: rgba(0,0,0,0.04);
+    }
+    [data-theme="light"] .preview-search-clear:hover { color: #000; }
+
     .key-filter-label {
       font-size: 11px;
       font-weight: 600;
@@ -2254,6 +2334,25 @@
         <div class="panel preview-wrapper">
           <div class="panel-header">Preview</div>
           <div id="keyFilterBar" class="key-filter-bar" style="display:none;"></div>
+
+          <!-- Preview Search Bar -->
+          <div id="previewSearchBar" class="preview-search-bar" style="display:none;">
+            <div class="preview-search-inner">
+              <span class="preview-search-icon">🔍</span>
+              <input
+                type="text"
+                id="previewSearchInput"
+                class="preview-search-input"
+                placeholder='Search: "128 bpm a min", "138 bpm c drum loop", "dark pad"…'
+                autocomplete="off"
+                spellcheck="false"
+                oninput="onPreviewSearch(this.value)"
+                onkeydown="if(event.key==='Escape')clearPreviewSearch()"
+              >
+              <button class="preview-search-clear" id="previewSearchClearBtn" onclick="clearPreviewSearch()" title="Clear search (Esc)" style="display:none;">✕</button>
+            </div>
+            <div id="previewSearchHint" class="preview-search-hint"></div>
+          </div>
 
           <!-- BPM Range Slider -->
           <div id="bpmSliderContainer">
