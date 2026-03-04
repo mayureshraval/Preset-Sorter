@@ -613,5 +613,25 @@ module.exports = {
   getKeywords,
   saveKeywords,
   getDefaultKeywords,
-  getSupportedExtensions: () => [...SUPPORTED_EXTENSIONS]
+  getSupportedExtensions: () => [...SUPPORTED_EXTENSIONS],
+
+  async hasUndoLog() {
+    try {
+      await fs.access(getLogPath());
+      const data = await fs.readFile(getLogPath(), "utf-8");
+      const { moved } = JSON.parse(data);
+      return Array.isArray(moved) && moved.length > 0;
+    } catch { return false; }
+  },
+
+  // Restore a single file that was deleted via the UI (moves from trash-style backup)
+  // We store deleted-file backups in userData/deleted-files/<timestamp>_<filename>
+  async restoreDeletedFile(originalPath, backupPath) {
+    try {
+      await fs.rename(backupPath, originalPath);
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  }
 };

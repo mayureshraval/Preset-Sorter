@@ -907,5 +907,15 @@ module.exports = {
   saveSampleKeywords,
   getDefaultSampleKeywords,
   isSampleExtension,
-  getSampleExtension
+  getSampleExtension,
+
+  async hasUndoLog() {
+    try {
+      const logPath = getSampleLogPath();
+      await fs.access(logPath);
+      const data = await fs.readFile(logPath, "utf-8");
+      const { moved } = JSON.parse(data);
+      return Array.isArray(moved) && moved.length > 0;
+    } catch { return false; }
+  }
 };

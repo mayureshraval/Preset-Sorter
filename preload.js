@@ -27,6 +27,18 @@ contextBridge.exposeInMainWorld("api", {
   deleteFile: (filePath) =>
     ipcRenderer.invoke("delete-file", filePath),
 
+  backupAndDeleteFile: (filePath) =>
+    ipcRenderer.invoke("backup-and-delete-file", filePath),
+
+  restoreBackedUpFile: (originalPath, backupPath) =>
+    ipcRenderer.invoke("restore-backed-up-file", originalPath, backupPath),
+
+  readAudioFile: (filePath) =>
+    ipcRenderer.invoke("read-audio-file", filePath),
+
+  hasUndoLog: () =>
+    ipcRenderer.invoke("has-undo-log"),
+
   chooseFolder: () =>
     ipcRenderer.invoke("choose-folder"),
 getVersion: () => ipcRenderer.invoke("get-version"),
@@ -68,6 +80,6 @@ getVersion: () => ipcRenderer.invoke("get-version"),
   sampleUndo:            () => ipcRenderer.invoke("undo-sample-sort"),
   getSampleKeywords:     () => ipcRenderer.invoke("get-sample-keywords"),
   saveSampleKeywords:    (data) => ipcRenderer.invoke("save-sample-keywords", data),
-  restoreSampleDefaults: () => ipcRenderer.invoke("restore-sample-defaults")
+  restoreSampleDefaults: () => ipcRenderer.invoke("restore-sample-defaults"),
 
 });

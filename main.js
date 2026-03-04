@@ -29,7 +29,8 @@ function createWindow() {
     icon: path.join(__dirname, "assets/icon.ico"),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
-      contextIsolation: true
+      contextIsolation: true,
+      webSecurity: false   // allows file:// audio src from renderer
     }
   });
   mainWindow.loadFile("index.html");
@@ -126,6 +127,53 @@ ipcMain.handle("restore-defaults", () => sorter.getDefaultKeywords());
 ipcMain.handle("get-supported-extensions", () => sorter.getSupportedExtensions());
 
 ipcMain.handle("get-version", () => app.getVersion());
+
+// ── Undo availability ──────────────────────────────────────────────────────────
+ipcMain.handle("has-undo-log", async () => {
+  const [presetHas, sampleHas] = await Promise.all([
+    sorter.hasUndoLog(),
+    sampleSorter.hasUndoLog()
+  ]);
+  return { preset: presetHas, sample: sampleHas };
+});
+
+// ── Soft-delete with backup (for restore support) ──────────────────────────────
+// Instead of permanently deleting, we move the file to a temp backup folder.
+// The renderer can then offer "Restore" within the session.
+ipcMain.handle("backup-and-delete-file", async (event, filePath) => {
+  if (!filePath) return { success: false, error: "No path provided" };
+  try {
+    const os = require("os");
+    const backupDir = path.join(app.getPath("userData"), "deleted-backups");
+    await require("fs").promises.mkdir(backupDir, { recursive: true });
+    const timestamp = Date.now();
+    const basename  = path.basename(filePath);
+    const backupPath = path.join(backupDir, `${timestamp}_${basename}`);
+    await require("fs").promises.rename(filePath, backupPath);
+    return { success: true, backupPath };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle("restore-backed-up-file", async (event, originalPath, backupPath) => {
+  if (!originalPath || !backupPath) return { success: false, error: "Missing paths" };
+  try {
+    await require("fs").promises.rename(backupPath, originalPath);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// ── Audio file → ArrayBuffer (for fallback decoding of unsupported formats) ───
+ipcMain.handle("read-audio-file", async (event, filePath) => {
+  if (!filePath) return null;
+  try {
+    const buf = await require("fs").promises.readFile(filePath);
+    return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+  } catch { return null; }
+});
 
 // 🔥 FIX: Removed Worker thread entirely.
 // Workers cannot load modules from inside a packaged asar archive,

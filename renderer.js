@@ -20,6 +20,7 @@ let filteredPreviewData = [];
 let intelligenceMode = false;
 let isSorting = false;
 let isAnalyzing = false; // Blocks all folder interactions during scan
+let _analysisCancelled = false; // Set to true when user cancels during analysis
 let bpmRange = { min: 0, max: 300 }; // BPM slider range
 let skipDuplicates = false; // When true, exact duplicates (same name+size) are excluded from sort
 
@@ -58,6 +59,317 @@ function toggleTheme() {
   localStorage.setItem("themeOverride", isDarkTheme ? "dark" : "light");
   applyTheme();
 }
+
+// ================= AUDIO PLAYER =================
+// Playback uses an <audio> element + blob URL — crash-safe.
+// Web Audio API is used ONLY for waveform generation (isolated, never for playback).
+const audioPlayer = (() => {
+  let audioEl    = null;
+  let waveData   = null;
+  let playing    = false;
+  let vol        = 0.8;
+  let muted      = false;
+  let curItem    = null;
+  let queue      = [];
+  let queueIdx   = -1;
+  let _raf       = null;
+  let _loadGuard = null;
+
+  const AUDIO_EXTS = new Set([
+    ".wav",".mp3",".ogg",".flac",
+    ".aif",".aiff",".aifc",
+    ".m4a",".aac",".opus",".alac",
+    ".rx2",".rex"
+  ]);
+
+  function isAudio(item) {
+    return AUDIO_EXTS.has((item?.ext || "").toLowerCase());
+  }
+
+  function _getAudioEl() {
+    if (!audioEl) {
+      audioEl = new Audio();
+      audioEl.volume = muted ? 0 : vol;
+      audioEl.addEventListener("ended", () => {
+        // Stop after playing — do NOT auto-advance to next track
+        playing = false;
+        _stopRAF();
+        _setIcon("▶");
+        _updateProgress(0);
+        _updateTime(0, audioEl.duration || 0);
+        audioEl.currentTime = 0;
+        _refreshAllRowBtns();
+      });
+      audioEl.addEventListener("error", () => {
+        playing = false; _stopRAF(); _setIcon("✕"); _refreshAllRowBtns();
+        const err = audioEl.error;
+        try { _metaEl().textContent = err ? `Playback error (code ${err.code})` : "Playback error"; } catch {}
+      });
+    }
+    return audioEl;
+  }
+
+  async function loadItem(item, offset = 0) {
+    if (!item?.from) return;
+    _loadGuard = item.from;
+    _stopSrc();
+    playing = false; waveData = null; curItem = item;
+    _updateInfo(); _showBar(); _setIcon("⏳");
+
+    // Use file:// URL directly — no IPC byte transfer, no Blob, no memory crash.
+    const fileURL = "file:///" + item.from.replace(/\\/g, "/").replace(/^\/+/, "");
+    const el = _getAudioEl();
+    el.src = fileURL;
+    if (offset > 0) el.currentTime = offset;
+
+    try {
+      await el.play();
+      if (_loadGuard !== item.from) { el.pause(); return; }
+      playing = true; _setIcon("⏸"); _startRAF(); _refreshAllRowBtns();
+    } catch(e) {
+      console.error("[AudioPlayer] el.play() failed:", e);
+      _setIcon("✕");
+      try { _metaEl().textContent = "Playback failed: " + e.message; } catch {}
+    }
+  }
+
+  // Waveform canvas is left blank — no Web Audio API used.
+
+  function _stopSrc() {
+    const el = _getAudioEl();
+    try { el.pause(); el.src = ""; } catch {}
+    _stopRAF();
+  }
+
+  // ── Public API ────────────────────────────────────────────────────────────
+  function play(item) {
+    queue    = filteredPreviewData.filter(isAudio);
+    queueIdx = queue.findIndex(p => p.from === item.from);
+    if (queueIdx === -1) { queue = [item]; queueIdx = 0; }
+    loadItem(item);
+  }
+
+  function togglePlay() {
+    const el = _getAudioEl();
+    if (!el.src) return;
+    if (playing) {
+      el.pause(); playing = false; _stopRAF(); _setIcon("▶"); _refreshAllRowBtns();
+    } else {
+      el.play().then(() => {
+        playing = true; _setIcon("⏸"); _startRAF(); _refreshAllRowBtns();
+      }).catch(e => console.error("[AudioPlayer] resume failed:", e));
+    }
+  }
+
+  function stop() {
+    const el = _getAudioEl();
+    try { el.pause(); el.currentTime = 0; } catch {}
+    playing = false; _stopRAF(); _setIcon("▶");
+    _updateProgress(0); _updateTime(0, el.duration || 0); _refreshAllRowBtns();
+  }
+
+  function seek(frac) {
+    const el = _getAudioEl();
+    if (!el.src || !isFinite(el.duration)) return;
+    el.currentTime = frac * el.duration;
+    _updateProgress(frac);
+  }
+
+  function prev() { if (queueIdx > 0) { queueIdx--; loadItem(queue[queueIdx]); } }
+  function next() {
+    if (queueIdx < queue.length - 1) { queueIdx++; loadItem(queue[queueIdx]); }
+    else stop();
+  }
+
+  function setVolume(v) {
+    vol = Math.max(0, Math.min(1, v)); muted = false;
+    _getAudioEl().volume = vol; _updateVolSlider(); _updateVolIcon();
+  }
+
+  function toggleMute() {
+    muted = !muted;
+    _getAudioEl().volume = muted ? 0 : vol; _updateVolIcon();
+  }
+
+  function close() { stop(); _hideBar(); curItem = null; _refreshAllRowBtns(); }
+
+  function isPlayingItem(path) { return playing && curItem?.from === path; }
+  function isLoadedItem(path)  { return curItem?.from === path; }
+
+  // ── RAF progress loop ─────────────────────────────────────────────────────
+  function _startRAF() {
+    _stopRAF();
+    const el = _getAudioEl();
+    const tick = () => {
+      if (!playing) return;
+      const dur  = el.duration || 0;
+      const cur  = el.currentTime || 0;
+      const frac = dur > 0 ? Math.min(cur / dur, 1) : 0;
+      _updateProgress(frac); _updateTime(cur, dur);
+      if (frac < 1) _raf = requestAnimationFrame(tick);
+    };
+    _raf = requestAnimationFrame(tick);
+  }
+  function _stopRAF() { if (_raf) { cancelAnimationFrame(_raf); _raf = null; } }
+
+  // ── Waveform ──────────────────────────────────────────────────────────────
+  function _buildWave(buf) {
+    const ch = buf.getChannelData(0);
+    const N  = 280;
+    const bs = Math.floor(ch.length / N);
+    const out = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+      let max = 0;
+      const s = i * bs;
+      for (let j = 0; j < bs; j++) { const a = Math.abs(ch[s+j]||0); if(a>max)max=a; }
+      out[i] = max;
+    }
+    return out;
+  }
+
+  function _drawWave() {
+    const canvas = document.getElementById("playerWaveCanvas");
+    if (!canvas || !waveData) return;
+    const w = canvas.offsetWidth, h = canvas.offsetHeight;
+    if (w < 4 || h < 4) return;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = w * dpr; canvas.height = h * dpr;
+    const c = canvas.getContext("2d");
+    c.scale(dpr, dpr); c.clearRect(0, 0, w, h);
+    const bw = w / waveData.length;
+    const mid = h / 2, amp = h / 2 - 2;
+    for (let i = 0; i < waveData.length; i++) {
+      const peak = waveData[i];
+      const barH = Math.max(1, peak * amp);
+      c.fillStyle = `rgba(${Math.round(80+peak*140)},0,${Math.round(148+peak*107)},0.8)`;
+      c.fillRect(i * bw, mid - barH, Math.max(1, bw - 0.5), barH * 2);
+    }
+  }
+
+  function _drawWaveWhenReady() {
+    const wrap = document.getElementById("playerWaveformWrap");
+    if (!wrap) { _drawWave(); return; }
+    if (wrap.offsetWidth > 4) { _drawWave(); return; }
+    const ro = new ResizeObserver(entries => {
+      for (const e of entries) {
+        if (e.contentRect.width > 4) { ro.disconnect(); _drawWave(); return; }
+      }
+    });
+    ro.observe(wrap);
+    setTimeout(() => ro.disconnect(), 1000);
+  }
+
+  // ── DOM helpers ───────────────────────────────────────────────────────────
+  function _showBar() {
+    const b = document.getElementById("audioPlayerBar");
+    if (b) { b.classList.add("visible"); document.body.classList.add("player-open"); }
+  }
+  function _hideBar() {
+    const b = document.getElementById("audioPlayerBar");
+    if (b) { b.classList.remove("visible"); document.body.classList.remove("player-open"); }
+  }
+  function _setIcon(ic) { const b = document.getElementById("playerPlayBtn"); if (b) b.textContent = ic; }
+  function _nameEl()  { return document.getElementById("playerFilename"); }
+  function _metaEl()  { return document.getElementById("playerMeta"); }
+  function _timeEl()  { return document.getElementById("playerTimeDisplay"); }
+  function _progEl()  { return document.getElementById("playerProgressOverlay"); }
+
+  function _updateInfo() {
+    if (!curItem) return;
+    const n = _nameEl();
+    if (n) { n.textContent = curItem.file.replace(/\.[^.]+$/, ""); n.title = curItem.from; }
+    const m = _metaEl();
+    if (m) {
+      const parts = [];
+      if (curItem.metadata?.bpm) parts.push(Math.round(curItem.metadata.bpm) + " BPM");
+      if (curItem.metadata?.key) parts.push(curItem.metadata.key.toUpperCase());
+      if (curItem.sampleType && curItem.sampleType !== "unknown")
+        parts.push(curItem.sampleType === "one-shot" ? "One Shot" : "Loop");
+      if (curItem.ext) parts.push(curItem.ext.replace(".","").toUpperCase());
+      m.textContent = parts.join("  ·  ");
+    }
+    const pb = document.getElementById("playerPrevBtn");
+    const nb = document.getElementById("playerNextBtn");
+    if (pb) pb.style.opacity = queueIdx <= 0 ? "0.3" : "1";
+    if (nb) nb.style.opacity = queueIdx >= queue.length-1 ? "0.3" : "1";
+  }
+
+  function _updateProgress(frac) { const el = _progEl(); if (el) el.style.width = (frac*100)+"%"; }
+  function _updateTime(cur, dur) { const el = _timeEl(); if (el) el.textContent = `${_fmtTime(cur)} / ${_fmtTime(dur)}`; }
+  function _updateVolSlider() {
+    const s = document.getElementById("playerVolumeSlider");
+    if (s) { s.value = vol; s.style.setProperty("--vol", Math.round(vol*100)+"%"); }
+  }
+  function _updateVolIcon() {
+    const el = document.getElementById("playerVolIcon");
+    if (el) el.textContent = muted || vol === 0 ? "🔇" : vol < 0.4 ? "🔉" : "🔊";
+  }
+  function _refreshAllRowBtns() {
+    // List/columns view: .row-play-area + .row-play-icon inside .row-name-cell
+    document.querySelectorAll(".row-play-area").forEach(area => {
+      const active = area.dataset.from === curItem?.from && playing;
+      area.classList.toggle("is-playing", active);
+      const icon = area.querySelector(".row-play-icon");
+      if (icon) icon.textContent = active ? "■" : "▶";
+    });
+    // Grid view chips still use the old .row-play-btn class
+    document.querySelectorAll(".row-play-btn").forEach(btn => {
+      const active = btn.dataset.from === curItem?.from && playing;
+      btn.classList.toggle("is-playing", active);
+      btn.textContent = active ? "■" : "▶";
+    });
+  }
+
+  // ── DOM event wiring ──────────────────────────────────────────────────────
+  function initDOM() {
+    document.getElementById("playerPlayBtn")?.addEventListener("click", togglePlay);
+    document.getElementById("playerPrevBtn")?.addEventListener("click", prev);
+    document.getElementById("playerNextBtn")?.addEventListener("click", next);
+    document.getElementById("playerCloseBtn")?.addEventListener("click", close);
+    document.getElementById("playerVolIcon")?.addEventListener("click", toggleMute);
+
+    const vs = document.getElementById("playerVolumeSlider");
+    if (vs) {
+      vs.value = vol;
+      vs.style.setProperty("--vol", Math.round(vol*100)+"%");
+      vs.addEventListener("input", () => setVolume(parseFloat(vs.value)));
+    }
+
+    const ww = document.getElementById("playerWaveformWrap");
+    if (ww) {
+      let scrub = false;
+      const doSeek = e => {
+        const r = ww.getBoundingClientRect();
+        seek(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)));
+      };
+      ww.addEventListener("mousedown", e => { scrub = true; doSeek(e); });
+      window.addEventListener("mousemove", e => { if (scrub) doSeek(e); });
+      window.addEventListener("mouseup", () => { scrub = false; });
+    }
+
+    window.addEventListener("keydown", e => {
+      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+      if (!document.getElementById("audioPlayerBar")?.classList.contains("visible")) return;
+      const el = _getAudioEl();
+      const frac = () => el.duration ? el.currentTime / el.duration : 0;
+      if (e.code === "Space")      { e.preventDefault(); togglePlay(); }
+      else if (e.code === "ArrowLeft")  { e.preventDefault(); seek(Math.max(0, frac()-0.05)); }
+      else if (e.code === "ArrowRight") { e.preventDefault(); seek(Math.min(1, frac()+0.05)); }
+      else if (e.code === "Escape")     { e.preventDefault(); close(); }
+      else if (e.code === "KeyN")       { e.preventDefault(); next(); }
+      else if (e.code === "KeyP")       { e.preventDefault(); prev(); }
+    });
+
+    window.addEventListener("resize", () => { if (waveData) _drawWave(); });
+  }
+
+  return { play, togglePlay, stop, prev, next, setVolume, toggleMute, close,
+           initDOM, isPlayingItem, isLoadedItem, isAudio,
+           refreshRowBtns: _refreshAllRowBtns };
+})();
+
+// Wire up audio player DOM after everything is in the DOM
+window.addEventListener("load", () => audioPlayer.initDOM());
 
 // ================= APP MODE =================
 // "preset" | "sample"
@@ -1846,6 +2158,7 @@ async function selectFolder() {
 
 async function runPreview(folder) {
   isAnalyzing = true;
+  _analysisCancelled = false;
   _etaStartTime = Date.now();
   const modeLabel = appMode === "sample" ? "samples" : "presets";
 
@@ -1855,6 +2168,7 @@ async function runPreview(folder) {
   progressFill.style.width = "0%";
 
   window.api.onAnalyzeProgress(val => {
+    if (_analysisCancelled) return;
     progressFill.style.width = val + "%";
     const eta = calcETA(val);
     statusText.innerText = `Analyzing ${modeLabel}… ${val}%${eta ? "  |  " + eta : ""}`;
@@ -1870,10 +2184,19 @@ async function runPreview(folder) {
   } catch (err) {
     console.error(err);
     isAnalyzing = false;
+    _analysisCancelled = false;
     stopAnalyzingState();
     progressFill.style.width = "0%";
     statusText.innerText = "Error analyzing folder.";
     showEmptyState("Error analyzing folder. Try again.");
+    return;
+  }
+
+  // If the user cancelled while we were waiting for the IPC response, bail out.
+  // _doResetSession() will already have cleaned up the UI.
+  if (_analysisCancelled) {
+    _analysisCancelled = false;
+    isAnalyzing = false;
     return;
   }
 
@@ -2057,6 +2380,76 @@ function buildConfidenceBadge(confidence) {
 }
 
 // ── Build sample metadata tags row (shared across all 3 view modes) ─────────
+// ── Audio play button helper ──────────────────────────────────────────────────
+/**
+ * makeRowNameCell – returns a flex container with:
+ *   [● play icon] [filename text] [📂 locate btn]
+ * Clicking the icon or anywhere on the name text plays the audio.
+ * The locate button (visible on row hover via CSS) opens Windows Explorer.
+ */
+function makeRowNameCell(preset, displayName) {
+  const cell = document.createElement("div");
+  cell.className = "row-name-cell";
+
+  if (audioPlayer.isAudio(preset)) {
+    // ── Clickable play area (icon + name) ─────────────────────────
+    const playArea = document.createElement("div");
+    playArea.className = "row-play-area" + (audioPlayer.isPlayingItem(preset.from) ? " is-playing" : "");
+    playArea.dataset.from = preset.from; // used by _refreshAllRowBtns
+
+    const icon = document.createElement("span");
+    icon.className = "row-play-icon";
+    icon.dataset.from = preset.from;
+    icon.textContent = audioPlayer.isPlayingItem(preset.from) ? "■" : "▶";
+    icon.setAttribute("aria-label", "Play / Stop audio");
+    playArea.appendChild(icon);
+
+    const nameSpan = document.createElement("span");
+    nameSpan.className = "row-file-name";
+    nameSpan.textContent = displayName;
+    nameSpan.title = preset.from;
+    playArea.appendChild(nameSpan);
+
+    playArea.addEventListener("click", e => {
+      e.stopPropagation();
+      if (audioPlayer.isLoadedItem(preset.from)) audioPlayer.togglePlay();
+      else audioPlayer.play(preset);
+    });
+
+    cell.appendChild(playArea);
+  } else {
+    // Non-audio: just show the name
+    const nameSpan = document.createElement("span");
+    nameSpan.className = "row-file-name";
+    nameSpan.textContent = displayName;
+    nameSpan.title = preset.from;
+    nameSpan.style.padding = "2px 3px";
+    cell.appendChild(nameSpan);
+  }
+
+  // ── Locate button (always present, revealed on hover via CSS) ──
+  if (window.api?.showInFolder) {
+    const locBtn = document.createElement("button");
+    locBtn.className = "row-locate-btn";
+    locBtn.title = "Show in Windows Explorer";
+    locBtn.textContent = "📂";
+    locBtn.addEventListener("click", e => {
+      e.stopPropagation();
+      window.api.showInFolder(preset.from);
+    });
+    cell.appendChild(locBtn);
+  }
+
+  return cell;
+}
+
+function _fmtTime(sec) {
+  if (!isFinite(sec) || sec < 0) return "0:00";
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
 function buildSampleTagsWrap(preset) {
   const wrap = document.createElement("span");
   wrap.style.cssText = "display:inline-flex; align-items:center; gap:3px; flex-shrink:0;";
@@ -2368,10 +2761,29 @@ function renderPreview() {
         row.className = "file-row";
         row.style.cssText = "display:flex; align-items:center; justify-content:space-between; gap:4px;";
 
-        const nameSpan = document.createElement("span");
-        nameSpan.textContent = appMode === "sample" ? stripDisplayExtension(preset.file) : preset.file;
-        nameSpan.style.cssText = "flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
-        row.appendChild(nameSpan);
+        const displayName = appMode === "sample" ? stripDisplayExtension(preset.file) : preset.file;
+
+        if (appMode === "sample") {
+          // ── Sample: big play-prefix name cell ───────────────────────────
+          row.appendChild(makeRowNameCell(preset, displayName));
+        } else {
+          // ── Preset: plain name + small play btn if audio ─────────────────
+          const nameSpan = document.createElement("span");
+          nameSpan.textContent = displayName;
+          nameSpan.style.cssText = "flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
+          row.appendChild(nameSpan);
+          // Small play btn for audio presets (keep original style)
+          if (audioPlayer.isAudio(preset)) {
+            const btn = document.createElement("button");
+            btn.className = "row-play-btn" + (audioPlayer.isPlayingItem(preset.from) ? " is-playing" : "");
+            btn.dataset.from = preset.from;
+            btn.title = "Preview audio";
+            btn.textContent = audioPlayer.isPlayingItem(preset.from) ? "■" : "▶";
+            btn.style.cssText = "background:none;border:1px solid rgba(148,0,211,0.4);color:#b06be0;border-radius:3px;font-size:10px;padding:1px 5px;cursor:pointer;flex-shrink:0;line-height:1.4;transition:background .15s,color .15s;";
+            btn.addEventListener("click", e => { e.stopPropagation(); audioPlayer.isLoadedItem(preset.from) ? audioPlayer.togglePlay() : audioPlayer.play(preset); });
+            row.appendChild(btn);
+          }
+        }
 
         if (appMode === "sample") {
           const tagsWrap = buildSampleTagsWrap(preset);
@@ -2455,6 +2867,10 @@ function renderPreview() {
         nameSpan.style.cssText = "overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:100%;";
         chip.appendChild(nameSpan);
 
+        // ── Audio play button ───────────────────────────────────────────────
+        const playBtn = makeRowPlayBtn(preset);
+        if (playBtn) chip.appendChild(playBtn);
+
         if (appMode === "sample") {
           const tagsWrap = buildSampleTagsWrap(preset);
           tagsWrap.style.cssText = "display:flex; flex-wrap:wrap; gap:3px; align-items:center;";
@@ -2526,16 +2942,15 @@ function renderPreview() {
         row.title = preset.file;
 
         if (appMode === "sample") {
-          // Sample mode: name on top, tags row below
-          row.style.cssText = "display:flex; flex-direction:column; gap:3px; padding:5px 12px;";
+          // Sample mode: play-prefix name on top, tags row below
+          row.style.cssText = "display:flex; flex-direction:column; gap:3px; padding:5px 8px;";
 
-          const nameSpan = document.createElement("span");
-          nameSpan.textContent = stripDisplayExtension(preset.file);
-          nameSpan.style.cssText = "overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; color:#bbb;";
-          row.appendChild(nameSpan);
+          // Name cell with play prefix + locate btn
+          const nameCell = makeRowNameCell(preset, stripDisplayExtension(preset.file));
+          row.appendChild(nameCell);
 
           const tagsWrap = buildSampleTagsWrap(preset);
-          tagsWrap.style.cssText = "display:flex; flex-wrap:wrap; gap:3px;";
+          tagsWrap.style.cssText = "display:flex; flex-wrap:wrap; gap:3px; padding-left:2px;";
           row.appendChild(tagsWrap);
         } else {
           row.style.cssText = "display:flex; align-items:center; justify-content:space-between; gap:6px;";
@@ -2543,6 +2958,19 @@ function renderPreview() {
           nameSpan.textContent = stripDisplayExtension(preset.file);
           nameSpan.style.cssText = "flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
           row.appendChild(nameSpan);
+
+          // Small play btn for audio presets in columns view
+          if (audioPlayer.isAudio(preset)) {
+            const btn = document.createElement("button");
+            btn.className = "row-play-btn" + (audioPlayer.isPlayingItem(preset.from) ? " is-playing" : "");
+            btn.dataset.from = preset.from;
+            btn.title = "Preview audio";
+            btn.textContent = audioPlayer.isPlayingItem(preset.from) ? "■" : "▶";
+            btn.style.cssText = "background:none;border:1px solid rgba(148,0,211,0.4);color:#b06be0;border-radius:3px;font-size:10px;padding:1px 5px;cursor:pointer;flex-shrink:0;line-height:1.4;transition:background .15s,color .15s;";
+            btn.addEventListener("click", e => { e.stopPropagation(); audioPlayer.isLoadedItem(preset.from) ? audioPlayer.togglePlay() : audioPlayer.play(preset); });
+            row.appendChild(btn);
+          }
+
           const colTagsC = document.createElement("span");
           colTagsC.style.cssText = "display:inline-flex; align-items:center; gap:3px; flex-shrink:0;";
           if (preset.isDuplicate) {
@@ -2704,66 +3132,93 @@ function applyDupManagerSelections() {
 }
 
 /** Render tabs, toolbar and file groups inside the modal */
+/** Render tabs, toolbar, explainer and file groups inside the modal */
 function renderDupManager() {
   const groups = buildDupGroups();
-  const subEl     = document.getElementById("dupManagerSub");
-  const tabsEl    = document.getElementById("dupManagerTabs");
-  const toolbarEl = document.getElementById("dupManagerToolbar");
-  const bodyEl    = document.getElementById("dupManagerBody");
+  const subEl      = document.getElementById("dupManagerSub");
+  const tabsEl     = document.getElementById("dupManagerTabs");
+  const explEl     = document.getElementById("dupManagerExplainer");
+  const toolbarEl  = document.getElementById("dupManagerToolbar");
+  const bodyEl     = document.getElementById("dupManagerBody");
 
   if (!subEl || !tabsEl || !toolbarEl || !bodyEl) return;
 
   const totalExact   = groups.exact.reduce((s, g) => s + g.length, 0);
   const totalVariant = groups.variant.reduce((s, g) => s + g.length, 0);
 
-  subEl.textContent = `${totalExact} exact duplicate${totalExact !== 1 ? "s" : ""} · ${totalVariant} name collision${totalVariant !== 1 ? "s" : ""}`;
+  // Friendly subtitle
+  const exactSets   = groups.exact.length;
+  const variantSets = groups.variant.length;
+  subEl.textContent =
+    `Found ${exactSets} set${exactSets !== 1 ? "s" : ""} of exact copies` +
+    ` · ${variantSets} set${variantSets !== 1 ? "s" : ""} with same name, different content`;
 
   // ── Tabs ──────────────────────────────────────────────────────────────────
   tabsEl.innerHTML = "";
 
-  [
-    { id: "exact",   label: `⚠ Exact Duplicates (${groups.exact.length} group${groups.exact.length !== 1 ? "s" : ""})` },
-    { id: "variant", label: `⇄ Name Collisions (${groups.variant.length} group${groups.variant.length !== 1 ? "s" : ""})` },
-  ].forEach(t => {
+  const tabs = [
+    { id: "exact",   emoji: "🔴", label: "Exact Copies",          count: exactSets   },
+    { id: "variant", emoji: "🟡", label: "Same Name, Different File", count: variantSets },
+  ];
+
+  tabs.forEach(t => {
     const btn = document.createElement("button");
     btn.className = `dup-tab${dupManagerTab === t.id ? " active" : ""}`;
-    btn.textContent = t.label;
+    btn.innerHTML = `${t.emoji} ${t.label} <span style="opacity:0.6;font-weight:400;margin-left:4px;">(${t.count})</span>`;
     btn.onclick = () => { dupManagerTab = t.id; renderDupManager(); };
     tabsEl.appendChild(btn);
   });
+
+  // ── Explainer banner ──────────────────────────────────────────────────────
+  if (explEl) {
+    explEl.innerHTML = "";
+    const banner = document.createElement("div");
+    banner.className = "dup-explainer";
+
+    if (dupManagerTab === "exact") {
+      banner.innerHTML = `
+        <strong>These files are byte-for-byte identical</strong> — same filename, same size, same content.
+        The <span style="color:#30e870;font-weight:600;">KEEP</span> badge marks the first copy found.
+        All other copies are checked by default and will be sorted too, unless you uncheck them or delete them.
+        <div class="dup-explainer-tip">Tip: Click <em>"✂ Keep First Copy Only"</em> to automatically uncheck all extras — then sort or delete them.</div>
+      `;
+    } else {
+      banner.innerHTML = `
+        <strong>These files share a filename but are different sizes</strong>, so they are probably different versions of the same sample.
+        All copies are checked and will be sorted. During sort, each copy gets a number added automatically (e.g. <em>Kick (1).wav, Kick (2).wav</em>).
+        <div class="dup-explainer-tip">Tip: Uncheck any version you don't need, or click <em>"📂 Open Folder"</em> to listen and compare before deciding.</div>
+      `;
+    }
+    explEl.appendChild(banner);
+  }
 
   // ── Toolbar ───────────────────────────────────────────────────────────────
   toolbarEl.innerHTML = "";
   const currentGroups = groups[dupManagerTab] || [];
   const currentItems  = currentGroups.flat().filter(p => !dupDeletedPaths.has(p.from));
 
-  // Select / Deselect all
+  // Include All / Exclude All
   const selAllBtn = document.createElement("button");
   selAllBtn.className = "dup-toolbar-btn";
-  selAllBtn.textContent = "✓ Include All";
-  selAllBtn.onclick = () => {
-    currentItems.forEach(p => dupIncludeMap.set(p.from, true));
-    renderDupManager();
-  };
+  selAllBtn.textContent = "✓ Check All";
+  selAllBtn.title = "Mark all files as included in sort";
+  selAllBtn.onclick = () => { currentItems.forEach(p => dupIncludeMap.set(p.from, true)); renderDupManager(); };
   toolbarEl.appendChild(selAllBtn);
 
   const deselAllBtn = document.createElement("button");
   deselAllBtn.className = "dup-toolbar-btn";
-  deselAllBtn.textContent = "✕ Exclude All";
-  deselAllBtn.onclick = () => {
-    currentItems.forEach(p => dupIncludeMap.set(p.from, false));
-    renderDupManager();
-  };
+  deselAllBtn.textContent = "✕ Uncheck All";
+  deselAllBtn.title = "Mark all files as skipped (they won't be sorted)";
+  deselAllBtn.onclick = () => { currentItems.forEach(p => dupIncludeMap.set(p.from, false)); renderDupManager(); };
   toolbarEl.appendChild(deselAllBtn);
 
   if (dupManagerTab === "exact") {
     const sep1 = document.createElement("div"); sep1.className = "dup-toolbar-sep"; toolbarEl.appendChild(sep1);
 
-    // Keep first of each group
     const keepFirstBtn = document.createElement("button");
     keepFirstBtn.className = "dup-toolbar-btn";
-    keepFirstBtn.title = "For each duplicate group, include the first copy and exclude all others";
-    keepFirstBtn.textContent = "Keep First Copy";
+    keepFirstBtn.title = "Keep the first copy of each group checked. Uncheck all extra copies.";
+    keepFirstBtn.textContent = "✂ Keep First Copy Only";
     keepFirstBtn.onclick = () => {
       currentGroups.forEach(group => {
         group.filter(p => !dupDeletedPaths.has(p.from)).forEach((p, idx) => {
@@ -2776,34 +3231,34 @@ function renderDupManager() {
 
     const sep2 = document.createElement("div"); sep2.className = "dup-toolbar-sep"; toolbarEl.appendChild(sep2);
 
-    // Delete all non-kept
     const delExtraBtn = document.createElement("button");
     delExtraBtn.className = "dup-toolbar-btn danger";
-    delExtraBtn.title = "Permanently delete all copies except the first in each group";
-    delExtraBtn.textContent = "🗑 Delete Extras";
+    delExtraBtn.title = "Permanently delete all extra copies — only the first copy of each group is kept on disk";
+    delExtraBtn.textContent = "🗑 Delete All Extras";
     delExtraBtn.onclick = async () => {
       const toDelete = currentGroups.flatMap(group =>
         group.filter(p => !dupDeletedPaths.has(p.from)).filter((_, idx) => idx > 0)
       );
       if (!toDelete.length) return;
-      if (!confirm(`Permanently delete ${toDelete.length} file${toDelete.length > 1 ? "s" : ""}? This cannot be undone.`)) return;
+      if (!confirm(
+        `This will permanently delete ${toDelete.length} file${toDelete.length > 1 ? "s" : ""} from your hard drive.\n\n` +
+        `Only the first copy of each group will be kept.\n\nThis cannot be undone. Continue?`
+      )) return;
       for (const p of toDelete) {
         const res = await window.api.deleteFile(p.from);
-        if (res.success) {
-          dupDeletedPaths.add(p.from);
-          dupIncludeMap.delete(p.from);
-        }
+        if (res.success) { dupDeletedPaths.add(p.from); dupIncludeMap.delete(p.from); }
       }
       renderDupManager();
     };
     toolbarEl.appendChild(delExtraBtn);
   }
 
-  // Selected count chip (right-aligned)
+  // Count chip (right-aligned)
   const includedCount = currentItems.filter(p => dupIncludeMap.get(p.from) !== false).length;
   const countChip = document.createElement("span");
   countChip.className = "dup-selected-count";
-  countChip.textContent = `${includedCount} / ${currentItems.length} included in sort`;
+  countChip.textContent = `${includedCount} / ${currentItems.length} will be sorted`;
+  countChip.title = "Files that are checked will be included when you click Start Sort";
   toolbarEl.appendChild(countChip);
 
   // ── Body: group cards ─────────────────────────────────────────────────────
@@ -2812,16 +3267,16 @@ function renderDupManager() {
   if (currentGroups.length === 0) {
     const empty = document.createElement("div");
     empty.className = "dup-empty";
-    empty.textContent = dupManagerTab === "exact"
-      ? "No exact duplicates found in this scan."
-      : "No name collisions found — all filenames are unique.";
+    empty.innerHTML = dupManagerTab === "exact"
+      ? `<div style="font-size:28px;margin-bottom:8px;">✅</div>No exact copies found.<div style="font-size:11px;margin-top:4px;opacity:0.7;">Every file has a unique name and size.</div>`
+      : `<div style="font-size:28px;margin-bottom:8px;">✅</div>All filenames are unique.<div style="font-size:11px;margin-top:4px;opacity:0.7;">No files share the same name.</div>`;
     bodyEl.appendChild(empty);
     return;
   }
 
   currentGroups.forEach(group => {
     const liveGroup = group.filter(p => !dupDeletedPaths.has(p.from));
-    if (!liveGroup.length) return; // all deleted from this group
+    if (!liveGroup.length) return;
 
     const card = document.createElement("div");
     card.className = "dup-group";
@@ -2843,7 +3298,10 @@ function renderDupManager() {
 
     const typeBadge = document.createElement("span");
     typeBadge.className = `dup-group-type-badge ${dupManagerTab}`;
-    typeBadge.textContent = dupManagerTab === "exact" ? "EXACT" : "VARIANT";
+    typeBadge.title = dupManagerTab === "exact"
+      ? "Byte-for-byte identical files"
+      : "Same filename but different content / size";
+    typeBadge.textContent = dupManagerTab === "exact" ? "IDENTICAL" : "SAME NAME";
     header.appendChild(typeBadge);
 
     card.appendChild(header);
@@ -2860,14 +3318,18 @@ function renderDupManager() {
       cb.type = "checkbox";
       cb.className = "dup-file-check";
       cb.checked = isIncluded;
-      cb.title = isIncluded ? "Click to exclude from sort" : "Click to include in sort";
+      cb.title = isIncluded
+        ? "Checked — will be sorted. Click to skip this file."
+        : "Unchecked — will be skipped. Click to include this file.";
       cb.onchange = () => {
         dupIncludeMap.set(item.from, cb.checked);
+        cb.title = cb.checked
+          ? "Checked — will be sorted. Click to skip this file."
+          : "Unchecked — will be skipped. Click to include this file.";
         row.classList.toggle("excluded", !cb.checked);
-        // Update count chip
-        const live2 = currentGroups.flat().filter(p => !dupDeletedPaths.has(p.from));
-        const inc2  = live2.filter(p => dupIncludeMap.get(p.from) !== false).length;
-        countChip.textContent = `${inc2} / ${live2.length} included in sort`;
+        const live2  = currentGroups.flat().filter(p => !dupDeletedPaths.has(p.from));
+        const inc2   = live2.filter(p => dupIncludeMap.get(p.from) !== false).length;
+        countChip.textContent = `${inc2} / ${live2.length} will be sorted`;
       };
       row.appendChild(cb);
 
@@ -2883,7 +3345,7 @@ function renderDupManager() {
       const pathSpan = document.createElement("div");
       pathSpan.className = "dup-file-path";
       pathSpan.textContent = item.from;
-      pathSpan.title = item.from;
+      pathSpan.title = "Full path: " + item.from;
       info.appendChild(pathSpan);
 
       row.appendChild(info);
@@ -2892,14 +3354,15 @@ function renderDupManager() {
       const sizeEl = document.createElement("div");
       sizeEl.className = "dup-file-size";
       sizeEl.textContent = formatBytes(item.size);
+      sizeEl.title = "File size";
       row.appendChild(sizeEl);
 
-      // KEPT badge (first in exact group)
+      // KEEP badge (first in exact group)
       if (dupManagerTab === "exact" && idx === 0) {
         const keptBadge = document.createElement("span");
         keptBadge.className = "dup-kept-badge";
-        keptBadge.textContent = "FIRST";
-        keptBadge.title = "First occurrence — will be kept by default";
+        keptBadge.textContent = "KEEP";
+        keptBadge.title = "This is the first copy found — it will be kept by default";
         row.appendChild(keptBadge);
       }
 
@@ -2909,24 +3372,24 @@ function renderDupManager() {
 
       const locateBtn = document.createElement("button");
       locateBtn.className = "dup-action-btn locate";
-      locateBtn.textContent = "📂 Locate";
-      locateBtn.title = "Show this file in Windows Explorer";
+      locateBtn.textContent = "📂 Open Folder";
+      locateBtn.title = "Highlight this file in Windows Explorer";
       locateBtn.onclick = () => window.api.showInFolder(item.from);
       actions.appendChild(locateBtn);
 
       const deleteBtn = document.createElement("button");
       deleteBtn.className = "dup-action-btn delete-btn";
       deleteBtn.textContent = "🗑 Delete";
-      deleteBtn.title = "Permanently delete this file from disk";
+      deleteBtn.title = "Permanently delete this file from your hard drive (cannot be undone)";
       deleteBtn.onclick = async () => {
-        if (!confirm(`Permanently delete:\n${item.from}\n\nThis cannot be undone.`)) return;
+        if (!confirm(`Permanently delete this file?\n\n${item.from}\n\nThis cannot be undone.`)) return;
         const res = await window.api.deleteFile(item.from);
         if (res.success) {
           dupDeletedPaths.add(item.from);
           dupIncludeMap.delete(item.from);
           renderDupManager();
         } else {
-          alert(`Could not delete file:\n${res.error}`);
+          alert(`Could not delete the file:\n${res.error}`);
         }
       };
       actions.appendChild(deleteBtn);
@@ -3065,6 +3528,16 @@ async function undo() {
 
 // ================= RESET SESSION =================
 function resetSession() {
+  // If analysis is in progress, show a confirmation dialog with live ETA
+  if (isAnalyzing) {
+    _showCancelAnalysisDialog();
+    return;
+  }
+
+  _doResetSession();
+}
+
+function _doResetSession() {
   currentFolder = null;
   fullPreviewData = [];
   filteredPreviewData = [];
@@ -3081,6 +3554,128 @@ function resetSession() {
   if (hint) hint.textContent = "";
   resetBpmSlider();
   showEmptyState("Select a folder to sort.");
+}
+
+// ── Cancel-analysis confirmation dialog ──────────────────────────────────────
+let _cancelDialogEtaTimer = null;
+
+function _showCancelAnalysisDialog() {
+  // Don't show twice
+  if (document.getElementById("cancelAnalysisOverlay")) return;
+
+  const overlay = document.createElement("div");
+  overlay.id = "cancelAnalysisOverlay";
+  overlay.style.cssText = `
+    position: fixed; inset: 0; z-index: 9999;
+    background: rgba(0,0,0,0.72);
+    display: flex; align-items: center; justify-content: center;
+  `;
+
+  const dialog = document.createElement("div");
+  dialog.style.cssText = `
+    background: #1a1a28; border: 1px solid rgba(148,0,211,0.4);
+    border-radius: 12px; padding: 28px 32px; max-width: 420px; width: 90%;
+    text-align: center; box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+  `;
+
+  const iconEl = document.createElement("div");
+  iconEl.style.cssText = "font-size: 36px; margin-bottom: 12px;";
+  iconEl.textContent = "⚠️";
+
+  const titleEl = document.createElement("div");
+  titleEl.style.cssText = "font-size: 17px; font-weight: 700; color: #fff; margin-bottom: 8px;";
+  titleEl.textContent = "Cancel Analysis?";
+
+  const bodyEl = document.createElement("div");
+  bodyEl.style.cssText = "font-size: 13px; color: rgba(200,160,255,0.8); line-height: 1.55; margin-bottom: 6px;";
+  bodyEl.textContent = "Analysis is still running. Cancelling will stop the scan and start a new session.";
+
+  const etaEl = document.createElement("div");
+  etaEl.id = "cancelDialogEta";
+  etaEl.style.cssText = `
+    font-size: 13px; font-weight: 600;
+    color: #c084fc; margin: 10px 0 20px;
+    font-variant-numeric: tabular-nums;
+  `;
+  // Populate immediately with current ETA
+  etaEl.textContent = _getCancelDialogEtaText();
+
+  const btnRow = document.createElement("div");
+  btnRow.style.cssText = "display: flex; gap: 12px; justify-content: center;";
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.textContent = "Keep Analyzing";
+  cancelBtn.style.cssText = `
+    padding: 9px 20px; border-radius: 7px;
+    background: rgba(255,255,255,0.08); color: #ccc;
+    border: 1px solid rgba(255,255,255,0.15); cursor: pointer; font-size: 13px;
+  `;
+  cancelBtn.onclick = () => _closeCancelAnalysisDialog();
+
+  const confirmBtn = document.createElement("button");
+  confirmBtn.textContent = "Cancel & New Session";
+  confirmBtn.style.cssText = `
+    padding: 9px 20px; border-radius: 7px;
+    background: #9400d3; color: #fff;
+    border: none; cursor: pointer; font-size: 13px; font-weight: 600;
+  `;
+  confirmBtn.onclick = () => {
+    _closeCancelAnalysisDialog();
+    _analysisCancelled = true;
+    // isAnalyzing will be cleared by runPreview when it detects the cancel flag
+    // Force-stop the UI now so it feels instant
+    isAnalyzing = false;
+    stopAnalyzingState();
+    _doResetSession();
+  };
+
+  btnRow.appendChild(cancelBtn);
+  btnRow.appendChild(confirmBtn);
+  dialog.appendChild(iconEl);
+  dialog.appendChild(titleEl);
+  dialog.appendChild(bodyEl);
+  dialog.appendChild(etaEl);
+  dialog.appendChild(btnRow);
+  overlay.appendChild(dialog);
+
+  // Close on backdrop click
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) _closeCancelAnalysisDialog();
+  });
+  // Close on Escape
+  document._cancelAnalysisEscHandler = (e) => {
+    if (e.key === "Escape") _closeCancelAnalysisDialog();
+  };
+  document.addEventListener("keydown", document._cancelAnalysisEscHandler);
+
+  document.body.appendChild(overlay);
+
+  // Live ETA ticker — updates every second
+  _cancelDialogEtaTimer = setInterval(() => {
+    const el = document.getElementById("cancelDialogEta");
+    if (el) el.textContent = _getCancelDialogEtaText();
+  }, 1000);
+}
+
+function _getCancelDialogEtaText() {
+  if (!_etaStartTime) return "";
+  const currentPct = parseFloat(progressFill?.style.width) || 0;
+  const eta = calcETA(currentPct);
+  if (!eta) return currentPct > 0 ? `${Math.round(currentPct)}% complete` : "Scanning…";
+  return `${Math.round(currentPct)}% complete  ·  ${eta}`;
+}
+
+function _closeCancelAnalysisDialog() {
+  if (_cancelDialogEtaTimer) {
+    clearInterval(_cancelDialogEtaTimer);
+    _cancelDialogEtaTimer = null;
+  }
+  const overlay = document.getElementById("cancelAnalysisOverlay");
+  if (overlay) overlay.remove();
+  if (document._cancelAnalysisEscHandler) {
+    document.removeEventListener("keydown", document._cancelAnalysisEscHandler);
+    delete document._cancelAnalysisEscHandler;
+  }
 }
 
 // =============================================================================
