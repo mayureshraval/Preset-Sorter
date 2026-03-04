@@ -76,6 +76,7 @@ const audioPlayer = (() => {
   let queueIdx   = -1;
   let _raf       = null;
   let _loadGuard = null;
+  let _errorDismissTimer = null;
 
   const AUDIO_EXTS = new Set([
     ".wav",".mp3",".ogg",".flac",
@@ -105,7 +106,15 @@ const audioPlayer = (() => {
       audioEl.addEventListener("error", () => {
         playing = false; _stopRAF(); _setIcon("✕"); _refreshAllRowBtns();
         const err = audioEl.error;
-        try { _metaEl().textContent = err ? `Playback error (code ${err.code})` : "Playback error"; } catch {}
+        const codeMap = {
+          1: "Playback was aborted by the user.",
+          2: "A network error occurred while loading the file.",
+          3: "The file could not be decoded — it may be corrupted or use an unsupported codec.",
+          4: "The file format is not supported by this player."
+        };
+        const reason = err ? (codeMap[err.code] || `Unknown error (code ${err.code}).`) : "An unknown playback error occurred.";
+        try { _metaEl().textContent = "Playback error"; } catch {}
+        _showErrorPopup(reason);
       });
     }
     return audioEl;
@@ -128,10 +137,12 @@ const audioPlayer = (() => {
       await el.play();
       if (_loadGuard !== item.from) { el.pause(); return; }
       playing = true; _setIcon("⏸"); _startRAF(); _refreshAllRowBtns();
+      _hideErrorPopup();
     } catch(e) {
       console.error("[AudioPlayer] el.play() failed:", e);
       _setIcon("✕");
-      try { _metaEl().textContent = "Playback failed: " + e.message; } catch {}
+      try { _metaEl().textContent = "Playback failed"; } catch {}
+      _showErrorPopup(e.message || "The browser refused to play this file.");
     }
   }
 
@@ -261,7 +272,24 @@ const audioPlayer = (() => {
     setTimeout(() => ro.disconnect(), 1000);
   }
 
-  // ── DOM helpers ───────────────────────────────────────────────────────────
+  // ── Error popup ───────────────────────────────────────────────────────────
+  function _showErrorPopup(reason) {
+    const popup = document.getElementById("playerErrorPopup");
+    const msg   = document.getElementById("playerErrorMsg");
+    if (!popup) return;
+    if (msg) msg.textContent = reason || "Unable to play this file.";
+    popup.classList.add("visible");
+    // Auto-dismiss after 12 s
+    clearTimeout(_errorDismissTimer);
+    _errorDismissTimer = setTimeout(() => _hideErrorPopup(), 12000);
+  }
+  function _hideErrorPopup() {
+    const popup = document.getElementById("playerErrorPopup");
+    if (popup) popup.classList.remove("visible");
+    clearTimeout(_errorDismissTimer);
+  }
+
+  // ── Bar show/hide ─────────────────────────────────────────────────────────
   function _showBar() {
     const b = document.getElementById("audioPlayerBar");
     if (b) { b.classList.add("visible"); document.body.classList.add("player-open"); }
@@ -270,7 +298,19 @@ const audioPlayer = (() => {
     const b = document.getElementById("audioPlayerBar");
     if (b) { b.classList.remove("visible"); document.body.classList.remove("player-open"); }
   }
-  function _setIcon(ic) { const b = document.getElementById("playerPlayBtn"); if (b) b.textContent = ic; }
+  function _setIcon(ic) {
+    const svg = document.getElementById("playerPlayIcon");
+    if (!svg) return;
+    if (ic === "⏸") {
+      svg.innerHTML = '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>';
+    } else if (ic === "⏳") {
+      svg.innerHTML = '<path d="M6 2v6l4 4-4 4v6h12v-6l-4-4 4-4V2H6zm10 14.5V20H8v-3.5l4-4 4 4zm-4-5-4-4V4h8v3.5l-4 4z"/>';
+    } else if (ic === "✕") {
+      svg.innerHTML = '<path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>';
+    } else {
+      svg.innerHTML = '<path d="M8 5v14l11-7z"/>';
+    }
+  }
   function _nameEl()  { return document.getElementById("playerFilename"); }
   function _metaEl()  { return document.getElementById("playerMeta"); }
   function _timeEl()  { return document.getElementById("playerTimeDisplay"); }
@@ -303,8 +343,15 @@ const audioPlayer = (() => {
     if (s) { s.value = vol; s.style.setProperty("--vol", Math.round(vol*100)+"%"); }
   }
   function _updateVolIcon() {
-    const el = document.getElementById("playerVolIcon");
-    if (el) el.textContent = muted || vol === 0 ? "🔇" : vol < 0.4 ? "🔉" : "🔊";
+    const svg = document.getElementById("playerVolSvg");
+    if (!svg) return;
+    if (muted || vol === 0) {
+      svg.innerHTML = '<path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3 3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4 9.91 6.09 12 8.18V4z"/>';
+    } else if (vol < 0.4) {
+      svg.innerHTML = '<path d="M18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM5 9v6h4l5 5V4L9 9H5z"/>';
+    } else {
+      svg.innerHTML = '<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>';
+    }
   }
   function _refreshAllRowBtns() {
     // List/columns view: .row-play-area + .row-play-icon inside .row-name-cell
@@ -329,6 +376,18 @@ const audioPlayer = (() => {
     document.getElementById("playerNextBtn")?.addEventListener("click", next);
     document.getElementById("playerCloseBtn")?.addEventListener("click", close);
     document.getElementById("playerVolIcon")?.addEventListener("click", toggleMute);
+
+    // Error popup
+    document.getElementById("playerErrorClose")?.addEventListener("click", _hideErrorPopup);
+    document.getElementById("playerErrOpenDefault")?.addEventListener("click", () => {
+      // openFolder uses shell.openPath — works for files too, opens in default app
+      if (curItem?.from && window.api?.openFolder) window.api.openFolder(curItem.from);
+      _hideErrorPopup();
+    });
+    document.getElementById("playerErrReveal")?.addEventListener("click", () => {
+      if (curItem?.from && window.api?.showInFolder) window.api.showInFolder(curItem.from);
+      _hideErrorPopup();
+    });
 
     const vs = document.getElementById("playerVolumeSlider");
     if (vs) {

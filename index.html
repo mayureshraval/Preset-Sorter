@@ -2441,67 +2441,93 @@
       bottom: -90px;
       left: 0; right: 0;
       height: 64px;
-      background: #1a1a1a;
-      border-top: 1px solid #2e2e2e;
+      background: linear-gradient(to right, #141414, #1c1c1c, #141414);
+      border-top: 1px solid #2a2a2a;
       display: flex;
       align-items: center;
       gap: 10px;
-      padding: 0 14px;
+      padding: 0 16px;
       z-index: 9999;
-      transition: bottom 0.22s cubic-bezier(.4,0,.2,1);
+      transition: bottom 0.28s cubic-bezier(.4,0,.2,1);
       user-select: none;
+      box-shadow: 0 -4px 24px rgba(0,0,0,0.5);
     }
     #audioPlayerBar.visible { bottom: 0; }
     body.player-open { padding-bottom: 64px; }
 
-    #audioPlayerBar button {
+    /* ── Transport buttons ── */
+    .player-btn {
       background: none;
       border: none;
-      color: #ccc;
-      font-size: 16px;
+      color: #999;
       cursor: pointer;
-      padding: 4px 7px;
-      border-radius: 4px;
-      line-height: 1;
-      transition: color .15s, background .15s;
+      padding: 6px;
+      border-radius: 50%;
+      line-height: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color .15s, background .15s, transform .1s;
       flex-shrink: 0;
     }
-    #audioPlayerBar button:hover { color: #fff; background: #2e2e2e; }
+    .player-btn:hover { color: #fff; background: rgba(255,255,255,0.07); }
+    .player-btn:active { transform: scale(0.9); }
+    .player-btn svg { display: block; }
 
+    #playerPlayBtn {
+      width: 36px; height: 36px;
+      background: #9400D3;
+      color: #fff;
+      border-radius: 50%;
+      padding: 0;
+      box-shadow: 0 0 12px rgba(148,0,211,0.4);
+    }
+    #playerPlayBtn:hover {
+      background: #a800f0;
+      color: #fff;
+      transform: scale(1.06);
+    }
+    #playerPlayBtn:active { transform: scale(0.94); }
+
+    /* ── Track info ── */
     #playerInfo {
       display: flex;
       flex-direction: column;
       justify-content: center;
       min-width: 0;
       flex-shrink: 0;
-      max-width: 180px;
+      max-width: 190px;
     }
     #playerFilename {
       font-size: 12px;
       font-weight: 600;
-      color: #e0e0e0;
+      color: #e8e8e8;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      letter-spacing: 0.01em;
     }
     #playerMeta {
       font-size: 10px;
-      color: #888;
+      color: #666;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      margin-top: 1px;
+      margin-top: 2px;
+      letter-spacing: 0.03em;
     }
 
+    /* ── Waveform / seek area ── */
     #playerWaveformWrap {
       flex: 1;
       min-width: 0;
-      height: 38px;
+      height: 36px;
       position: relative;
       cursor: pointer;
-      background: #111;
-      border-radius: 4px;
+      background: #0e0e0e;
+      border-radius: 6px;
       overflow: hidden;
+      border: 1px solid #252525;
     }
     #playerWaveCanvas {
       display: block;
@@ -2513,57 +2539,196 @@
       top: 0; left: 0;
       height: 100%;
       width: 0%;
-      background: rgba(148, 0, 211, 0.18);
+      background: linear-gradient(to right, rgba(148,0,211,0.22), rgba(148,0,211,0.10));
       pointer-events: none;
       transition: width .05s linear;
     }
-
-    #playerTimeDisplay {
-      font-size: 10px;
-      color: #777;
-      white-space: nowrap;
-      flex-shrink: 0;
-      min-width: 72px;
-      text-align: right;
+    /* Playhead line */
+    #playerProgressOverlay::after {
+      content: '';
+      position: absolute;
+      right: 0; top: 0;
+      width: 2px; height: 100%;
+      background: #9400D3;
+      box-shadow: 0 0 6px rgba(148,0,211,0.8);
     }
 
+    /* ── Time display ── */
+    #playerTimeDisplay {
+      font-size: 10px;
+      color: #666;
+      white-space: nowrap;
+      flex-shrink: 0;
+      min-width: 76px;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.04em;
+    }
+
+    /* ── Volume ── */
     #playerVolumeWrap {
       display: flex;
       align-items: center;
-      gap: 5px;
+      gap: 6px;
       flex-shrink: 0;
     }
     #playerVolIcon {
-      font-size: 14px;
       cursor: pointer;
-      color: #888;
+      color: #777;
+      line-height: 0;
+      display: flex;
+      align-items: center;
       transition: color .15s;
+      padding: 3px;
+      border-radius: 4px;
     }
-    #playerVolIcon:hover { color: #ccc; }
+    #playerVolIcon:hover { color: #bbb; }
+    #playerVolIcon svg { display: block; }
 
     #playerVolumeSlider {
       -webkit-appearance: none;
       appearance: none;
-      width: 70px;
+      width: 72px;
       height: 3px;
-      border-radius: 2px;
-      background: linear-gradient(to right, #9400D3 var(--vol, 80%), #333 var(--vol, 80%));
+      border-radius: 99px;
+      background: linear-gradient(to right, #9400D3 var(--vol, 80%), #2c2c2c var(--vol, 80%));
       outline: none;
       cursor: pointer;
+      transition: height .15s;
     }
+    #playerVolumeSlider:hover { height: 4px; }
     #playerVolumeSlider::-webkit-slider-thumb {
       -webkit-appearance: none;
-      width: 11px; height: 11px;
+      width: 12px; height: 12px;
       border-radius: 50%;
-      background: #9400D3;
+      background: #c040ff;
       cursor: pointer;
+      box-shadow: 0 0 4px rgba(148,0,211,0.6);
+      transition: transform .1s, box-shadow .1s;
     }
+    #playerVolumeSlider::-webkit-slider-thumb:hover {
+      transform: scale(1.25);
+      box-shadow: 0 0 8px rgba(148,0,211,0.9);
+    }
+
+    /* ── Divider ── */
+    .player-divider {
+      width: 1px;
+      height: 28px;
+      background: #2a2a2a;
+      flex-shrink: 0;
+    }
+
+    /* ── Error popup ── */
+    #playerErrorPopup {
+      position: fixed;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%) translateY(10px);
+      background: #1e1e1e;
+      border: 1px solid #3a3a3a;
+      border-top: 2px solid #9400D3;
+      border-radius: 10px;
+      padding: 14px 18px;
+      min-width: 320px;
+      max-width: 460px;
+      z-index: 10000;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.7);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .2s, transform .2s;
+    }
+    #playerErrorPopup.visible {
+      opacity: 1;
+      pointer-events: all;
+      transform: translateX(-50%) translateY(0);
+    }
+    #playerErrorTitle {
+      font-size: 12px;
+      font-weight: 700;
+      color: #e0e0e0;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    #playerErrorTitle svg { color: #ff5555; flex-shrink: 0; }
+    #playerErrorMsg {
+      font-size: 11px;
+      color: #888;
+      margin-bottom: 12px;
+      line-height: 1.5;
+    }
+    #playerErrorActions {
+      display: flex;
+      gap: 8px;
+    }
+    .player-err-btn {
+      flex: 1;
+      padding: 7px 10px;
+      border-radius: 6px;
+      border: 1px solid #3a3a3a;
+      background: #252525;
+      color: #ccc;
+      font-size: 11px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      transition: background .15s, color .15s, border-color .15s;
+    }
+    .player-err-btn:hover { background: #2e2e2e; color: #fff; border-color: #555; }
+    .player-err-btn.primary {
+      background: rgba(148,0,211,0.15);
+      border-color: rgba(148,0,211,0.4);
+      color: #c040ff;
+    }
+    .player-err-btn.primary:hover {
+      background: rgba(148,0,211,0.25);
+      border-color: rgba(148,0,211,0.6);
+      color: #d060ff;
+    }
+    .player-err-btn svg { flex-shrink: 0; }
+    #playerErrorClose {
+      position: absolute;
+      top: 10px; right: 10px;
+      background: none;
+      border: none;
+      color: #555;
+      cursor: pointer;
+      padding: 2px;
+      border-radius: 4px;
+      line-height: 0;
+      transition: color .15s;
+    }
+    #playerErrorClose:hover { color: #aaa; }
   </style>
 
   <div id="audioPlayerBar">
-    <button id="playerPrevBtn" title="Previous (P)">⏮</button>
-    <button id="playerPlayBtn" title="Play / Pause (Space)">▶</button>
-    <button id="playerNextBtn" title="Next (N)">⏭</button>
+    <!-- Prev -->
+    <button id="playerPrevBtn" class="player-btn" title="Previous (P)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/>
+      </svg>
+    </button>
+
+    <!-- Play/Pause -->
+    <button id="playerPlayBtn" class="player-btn" title="Play / Pause (Space)">
+      <!-- icon swapped by JS -->
+      <svg id="playerPlayIcon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M8 5v14l11-7z"/>
+      </svg>
+    </button>
+
+    <!-- Next -->
+    <button id="playerNextBtn" class="player-btn" title="Next (N)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M6 18l8.5-6L6 6v12zm8.5-6v6h2V6h-2v6z"/>
+      </svg>
+    </button>
+
+    <div class="player-divider"></div>
 
     <div id="playerInfo">
       <div id="playerFilename">—</div>
@@ -2577,12 +2742,52 @@
 
     <div id="playerTimeDisplay">0:00 / 0:00</div>
 
+    <div class="player-divider"></div>
+
     <div id="playerVolumeWrap">
-      <span id="playerVolIcon">🔊</span>
+      <!-- Volume icon — swapped by JS -->
+      <span id="playerVolIcon">
+        <svg id="playerVolSvg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
+        </svg>
+      </span>
       <input type="range" id="playerVolumeSlider" min="0" max="1" step="0.01" value="0.8">
     </div>
 
-    <button id="playerCloseBtn" title="Close (Esc)">✕</button>
+    <div class="player-divider"></div>
+
+    <!-- Close -->
+    <button id="playerCloseBtn" class="player-btn" title="Close (Esc)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- ── Audio Error Popup ─────────────────────────────────────────────────── -->
+  <div id="playerErrorPopup">
+    <button id="playerErrorClose">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+      </svg>
+    </button>
+    <div id="playerErrorTitle">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+      </svg>
+      Playback Failed
+    </div>
+    <div id="playerErrorMsg">Unable to play this file.</div>
+    <div id="playerErrorActions">
+      <button class="player-err-btn primary" id="playerErrOpenDefault">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        Open in Default Player
+      </button>
+      <button class="player-err-btn" id="playerErrReveal">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
+        Reveal in Explorer
+      </button>
+    </div>
   </div>
 
 </body>
