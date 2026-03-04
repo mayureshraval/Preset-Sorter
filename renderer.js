@@ -3046,14 +3046,29 @@ function renderPreview() {
         chip.title = preset.file;
         chip.style.cssText = "display:flex; flex-direction:column; align-items:flex-start; gap:5px;";
 
-        const nameSpan = document.createElement("span");
-        nameSpan.textContent = appMode === "sample" ? stripDisplayExtension(preset.file) : stripDisplayExtension(preset.file);
-        nameSpan.style.cssText = "overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:100%;";
-        chip.appendChild(nameSpan);
+        if (appMode === "sample") {
+          // Sample mode: use the shared name cell (play icon + filename + locate btn)
+          const nameCell = makeRowNameCell(preset, stripDisplayExtension(preset.file));
+          nameCell.style.cssText = "width:100%; overflow:hidden;";
+          chip.appendChild(nameCell);
+        } else {
+          // Preset mode: plain name span + optional inline play button for audio presets
+          const nameSpan = document.createElement("span");
+          nameSpan.textContent = stripDisplayExtension(preset.file);
+          nameSpan.style.cssText = "overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:100%;";
+          chip.appendChild(nameSpan);
 
-        // ── Audio play button ───────────────────────────────────────────────
-        const playBtn = makeRowPlayBtn(preset);
-        if (playBtn) chip.appendChild(playBtn);
+          if (audioPlayer.isAudio(preset)) {
+            const btn = document.createElement("button");
+            btn.className = "row-play-btn" + (audioPlayer.isPlayingItem(preset.from) ? " is-playing" : "");
+            btn.dataset.from = preset.from;
+            btn.title = "Preview audio";
+            btn.textContent = audioPlayer.isPlayingItem(preset.from) ? "■" : "▶";
+            btn.style.cssText = "background:none;border:1px solid rgba(148,0,211,0.4);color:#b06be0;border-radius:3px;font-size:10px;padding:1px 5px;cursor:pointer;flex-shrink:0;line-height:1.4;transition:background .15s,color .15s;";
+            btn.addEventListener("click", e => { e.stopPropagation(); audioPlayer.isLoadedItem(preset.from) ? audioPlayer.togglePlay() : audioPlayer.play(preset); });
+            chip.appendChild(btn);
+          }
+        }
 
         if (appMode === "sample") {
           const tagsWrap = buildSampleTagsWrap(preset);
